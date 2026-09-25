@@ -25,8 +25,9 @@ export default function HistoryModal({ open, onOpenChange }) {
       <DialogContent className="max-w-2xl max-h-[82vh] flex flex-col">
         <DialogHeader className="flex-row items-center justify-between space-y-0">
           <DialogTitle className="font-display">Cycle history</DialogTitle>
-          <Button variant="outline" size="sm" asChild className="mr-6">
-            <a href={`${API_URL}/history/download`} target="_blank" rel="noreferrer">Download log (.txt)</a>
+          <Button variant="outline" size="sm" className="mr-6" nativeButton={false}
+                  render={<a href={`${API_URL}/history/download`} target="_blank" rel="noreferrer" />}>
+            Download log (.txt)
           </Button>
         </DialogHeader>
 

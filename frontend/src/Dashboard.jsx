@@ -9,6 +9,7 @@ import PipelineStepper from './PipelineStepper.jsx'
 import HistoryChart from './HistoryChart.jsx'
 import HistoryModal from './HistoryModal.jsx'
 import ComparisonCard from './ComparisonCard.jsx'
+import SituationPanel from './SituationPanel.jsx'
 import { useCountUp } from './useCountUp.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -106,7 +107,7 @@ export default function Dashboard({ onBack }) {
         setHistory((h) => [
           ...h.slice(-19),
           {
-            cycle: h.length + 1,
+            cycle: (h.at(-1)?.cycle || 0) + 1,   // h is trimmed to 20 points, so its length can't be the cycle number
             solar: data.decision?.solar_used_kw || 0,
             battery: data.decision?.battery_used_kw || 0,
             grid: data.decision?.grid_used_kw || 0,
@@ -167,7 +168,7 @@ export default function Dashboard({ onBack }) {
       setHistory((h) => [
         ...h.slice(-19),
         {
-          cycle: h.length + 1,
+          cycle: (h.at(-1)?.cycle || 0) + 1,   // h is trimmed to 20 points, so its length can't be the cycle number
           solar: data.decision.solar_used_kw || 0,
           battery: data.decision.battery_used_kw || 0,
           grid: data.decision.grid_used_kw || 0,
@@ -233,18 +234,16 @@ export default function Dashboard({ onBack }) {
               <span className="text-muted-foreground">day{days !== 1 ? 's' : ''}</span>
             </div>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="secondary" size="sm" onClick={runSimulation} disabled={simLoading || loading}>
-                  {simLoading ? 'Simulating…' : 'Run simulation'}
-                </Button>
+              <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={runSimulation} disabled={simLoading || loading} />}>
+                {simLoading ? 'Simulating…' : 'Run simulation'}
               </TooltipTrigger>
               <TooltipContent>Runs the chosen scenario for the chosen number of days in one go, instead of one cycle at a time.</TooltipContent>
             </Tooltip>
             <Button variant="ghost" size="sm" onClick={onBack}>← Overview</Button>
             <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>History report</Button>
             <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="outline" size="sm" onClick={resetSession}>Reset session</Button>
+              <TooltipTrigger render={<Button variant="outline" size="sm" onClick={resetSession} />}>
+                Reset session
               </TooltipTrigger>
               <TooltipContent>Clears this session's totals and chart. The server-side log keeps every cycle regardless.</TooltipContent>
             </Tooltip>
@@ -305,6 +304,7 @@ export default function Dashboard({ onBack }) {
 
             {state && (
               <>
+                <SituationPanel state={state} scenarioLabel={scenarios[state.scenario] || state.scenario || ''} />
                 <div className="legend">
                   <span><i style={{ background: 'var(--solar)' }} />Solar</span>
                   <span><i style={{ background: 'var(--battery)' }} />Battery</span>

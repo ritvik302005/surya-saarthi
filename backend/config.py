@@ -24,6 +24,13 @@ TOD_MULTIPLIERS = [            # (start_hour, end_hour_exclusive, multiplier, la
 ]
 
 
+def price_band_for_hour(hour_of_day):
+    for start, end, _, label in TOD_MULTIPLIERS:
+        if start <= hour_of_day < end:
+            return label
+    return "normal"
+
+
 def grid_price_for_hour(hour_of_day):
     for start, end, multiplier, _ in TOD_MULTIPLIERS:
         if start <= hour_of_day < end:

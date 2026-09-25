@@ -10,6 +10,7 @@ class GridState(TypedDict):
     flexible_loads: List[Dict]
     new_flexible_loads: List[Dict]
     grid_price_per_kwh: float
+    price_band: str
     forecast_solar_kw: float
     previous_forecast_kw: Optional[float]
     decision: Dict

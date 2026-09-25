@@ -119,6 +119,7 @@ def read_and_forecast_node(state):
         "battery_soc_pct": state.get("battery_soc_pct", config.INITIAL_BATTERY_SOC_PCT),
         "battery_capacity_kwh": state.get("battery_capacity_kwh", 10.0),
         "grid_price_per_kwh": config.grid_price_for_hour(sim_hour % 24),
+        "price_band": config.price_band_for_hour(sim_hour % 24),
         # Alerts belong to the current cycle. A replan does not pass through
         # sensing, so both interventions from that single cycle are retained.
         "alerts": []
