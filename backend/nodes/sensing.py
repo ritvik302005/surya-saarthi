@@ -1,5 +1,8 @@
-import requests
 import random
+import time
+
+import requests
+
 import config
 
 # Fetched once and cached, rather than hitting the API on every single /cycle
@@ -8,6 +11,19 @@ import config
 # clock hour returned identical solar readings. Indexing by a simulated hour
 # counter instead fixes both problems at once.
 _irradiance_cache = None
+_irradiance_fetched_at = 0.0
+IRRADIANCE_MAX_AGE_S = 6 * 3600
+
+# Typical essential load (kW) by hour for a home / small campus block: low at
+# night, a morning peak, moderate daytime, and the highest evening peak.
+ESSENTIAL_LOAD_PROFILE_KW = [
+    1.6, 1.5, 1.5, 1.5, 1.6, 1.8,   # 00-05 night
+    2.3, 3.0, 3.1, 2.8,             # 06-09 morning peak
+    2.4, 2.3, 2.4, 2.4, 2.3, 2.4,   # 10-15 daytime
+    2.6, 3.0,                       # 16-17 evening ramp
+    3.6, 3.8, 3.7, 3.4,             # 18-21 evening peak
+    2.8, 2.1,                       # 22-23
+]
 
 
 def _simulate_clear_sky_curve(hours=192):
@@ -26,9 +42,10 @@ def fetch_hourly_irradiance():
     """Returns a cached list of hourly shortwave_radiation values (W/m^2)
     covering 8 days, so /simulate can run up to a week with headroom for the
     next-hour lookahead, without re-fetching on every cycle."""
-    global _irradiance_cache
+    global _irradiance_cache, _irradiance_fetched_at
     if _irradiance_cache is not None:
         return _irradiance_cache
+    _irradiance_fetched_at = time.time()
 
     try:
         url = "https://api.open-meteo.com/v1/forecast"
@@ -53,6 +70,15 @@ def cloud_noise(variability):
     return min(1.25, max(0.1, random.gauss(1.0, variability)))
 
 
+def refresh_irradiance_if_stale():
+    """Called when a run starts: a long-running server re-fetches the forecast
+    every few hours instead of reusing the first day's data forever. Not called
+    mid-run, so hour indexes stay stable within a run."""
+    global _irradiance_cache
+    if _irradiance_cache is not None and time.time() - _irradiance_fetched_at > IRRADIANCE_MAX_AGE_S:
+        _irradiance_cache = None
+
+
 def irradiance_to_kw(irradiance_w_m2, system_capacity_kw=None):
     if system_capacity_kw is None:
         system_capacity_kw = config.SYSTEM_CAPACITY_KW
@@ -60,12 +86,10 @@ def irradiance_to_kw(irradiance_w_m2, system_capacity_kw=None):
 
 
 def simulate_demand(sim_hour):
-    """Same critical-load randomization as before, but flexible-load windows
-    now key off the simulated hour (wraps every 24) instead of datetime.now(),
-    so a scenario/day-count run produces a sensible day shape regardless of
-    what time it actually is on the server."""
+    """Essential load follows a daily profile (+/-10% noise); flexible-load
+    windows key off the simulated hour (wraps every 24)."""
     hour_of_day = sim_hour % 24
-    critical_load_kw = round(random.uniform(2.0, 3.5), 2)
+    critical_load_kw = round(ESSENTIAL_LOAD_PROFILE_KW[hour_of_day] * random.uniform(0.9, 1.1), 2)
     flexible_loads = []
     # Each flexible load is a one-hour job; the start hour in the name keeps
     # jobs unique so one can be deferred while another runs.

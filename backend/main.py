@@ -18,6 +18,7 @@ load_dotenv()
 import config
 from baseline import rule_based_step
 from graph import graph
+from nodes.sensing import refresh_irradiance_if_stale
 
 app = FastAPI(title="Microgrid Load Balancer API")
 
@@ -46,6 +47,7 @@ class Session:
 
     def reset(self, scenario=None):
         # keeps self.lock: reset runs while the lock is held
+        refresh_irradiance_if_stale()
         self.scenario = scenario or self.scenario
         self.state = {}
         self.history = []
