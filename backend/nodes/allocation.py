@@ -97,8 +97,9 @@ def _invoke_with_retry(messages):
         except Exception as error:
             last_error = error
             text = str(error)
-            retryable = ("rate_limit" in text or "429" in text or "json_validate_failed" in text
-                         or "503" in text or "timed out" in text.lower())
+            daily_limit = "tokens per day" in text or "(TPD)" in text   # can't succeed until tomorrow
+            retryable = not daily_limit and ("rate_limit" in text or "429" in text or "json_validate_failed" in text
+                                             or "503" in text or "timed out" in text.lower())
             if not retryable or attempt == config.LLM_MAX_ATTEMPTS - 1:
                 raise
             time.sleep(_retry_delay(error, attempt))
