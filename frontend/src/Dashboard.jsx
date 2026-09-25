@@ -314,6 +314,7 @@ export default function Dashboard({ onBack }) {
                   solarKw={decision.solar_used_kw || 0}
                   batteryKw={decision.battery_used_kw || 0}
                   gridKw={decision.grid_used_kw || 0}
+                  exportKw={decision.grid_export_kw || 0}
                   criticalKw={state.critical_load_kw || 0}
                   flexibleLoads={state.flexible_loads || []}
                   loading={loading}

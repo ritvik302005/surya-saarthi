@@ -15,18 +15,19 @@ function Node({ x, y, r, label, value, unit, color, dim }) {
   )
 }
 
-export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, criticalKw = 0, flexibleLoads = [], loading }) {
+export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exportKw = 0, criticalKw = 0, flexibleLoads = [], loading }) {
   const totalLoad = criticalKw + flexibleLoads.filter(l => !l.deferred).reduce((s, l) => s + l.power_kw, 0)
   const deferred = flexibleLoads.filter(l => l.deferred)
 
   const solar = useCountUp(solarKw)
-  const battery = useCountUp(batteryKw)
+  const battery = useCountUp(Math.abs(batteryKw))
+  const charging = batteryKw < -0.05
   const grid = useCountUp(gridKw)
   const load = useCountUp(totalLoad)
 
   const edges = [
     { from: [150, 90], kw: solarKw, color: 'var(--solar)', label: 'solar' },
-    { from: [150, 210], kw: batteryKw, color: 'var(--battery)', label: 'battery' },
+    { from: [150, 210], kw: Math.max(0, batteryKw), color: 'var(--battery)', label: 'battery' },
     { from: [150, 330], kw: gridKw, color: 'var(--grid)', label: 'grid' },
   ]
   const to = [640, 210]
@@ -51,9 +52,19 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, cri
           )
         })}
 
+        {charging && (
+          <path d="M112,104 C 78,135 78,165 112,196" className="flow-path active" stroke="var(--solar)"
+                strokeWidth={clampWidth(-batteryKw)} fill="none" />
+        )}
+
         <Node x={150} y={90} r={40} label="SOLAR" value={solar.toFixed(1)} unit="kW" color="var(--solar)" dim={solarKw <= 0.05} />
-        <Node x={150} y={210} r={40} label="BATTERY" value={battery.toFixed(1)} unit="kW" color="var(--battery)" dim={batteryKw <= 0.05} />
+        <Node x={150} y={210} r={40} label="BATTERY" value={battery.toFixed(1)} unit={charging ? 'kW in' : 'kW'} color="var(--battery)" dim={Math.abs(batteryKw) <= 0.05} />
         <Node x={150} y={330} r={40} label="GRID" value={grid.toFixed(1)} unit="kW" color="var(--grid)" dim={gridKw <= 0.05} />
+        {exportKw > 0.05 && (
+          <text x={150} y={392} textAnchor="middle" className="node-unit" style={{ fill: 'var(--solar)' }}>
+            ↑ exporting {exportKw.toFixed(1)} kW
+          </text>
+        )}
 
         <g transform="translate(640, 210)" className="flow-node load-node">
           <circle r="56" fill="var(--bg-panel)" stroke="var(--text-primary)" strokeWidth="2" />

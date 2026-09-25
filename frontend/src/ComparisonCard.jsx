@@ -38,7 +38,7 @@ export default function ComparisonCard({ comparison, csvUrl }) {
             </CardTitle>
             <CardDescription>
               Same sunlight and demand, {c.hours} hour{c.hours !== 1 ? 's' : ''}. The rule-based controller uses solar,
-              then battery, then grid, and never shifts a load.
+              then battery, then grid, exports any surplus, and never shifts a load.
             </CardDescription>
           </div>
           <a href={csvUrl} className="font-mono text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground">
@@ -58,6 +58,14 @@ export default function ComparisonCard({ comparison, csvUrl }) {
           <Stat value={`₹${c.extra_savings_rs.toFixed(2)}`} label="saved vs rule-based (ToD tariff)" />
           <Stat value={`${c.renewable_share_pct.toFixed(1)}%`} label="demand met by solar + battery" />
           <Stat value={`${c.safety_override_hours} / ${c.ai_fallback_hours}`} label="hours with safety override / AI fallback" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-5 border-t border-border">
+          <Stat value={`${(c.solar_generated_kwh ?? 0).toFixed(1)} kWh`} label="solar generated" tone="text-solar" />
+          <Stat value={`${(c.agent_solar_self_use_pct ?? 0).toFixed(1)}%`}
+                label={`used on site or stored (rules: ${(c.rule_solar_self_use_pct ?? 0).toFixed(1)}%)`} />
+          <Stat value={`${(c.agent_export_kwh ?? 0).toFixed(1)} kWh`} label="exported to grid (net metering)" />
+          <Stat value={`${(c.solar_wasted_kwh ?? 0).toFixed(1)} kWh`} label="solar wasted" />
         </div>
       </Card>
     </section>

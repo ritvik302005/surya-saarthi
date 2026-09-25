@@ -12,6 +12,7 @@ class GridState(TypedDict):
     grid_price_per_kwh: float
     price_band: str
     forecast_solar_kw: float
+    solar_forecast_next_hours: List[float]
     previous_forecast_kw: Optional[float]
     decision: Dict
     reasoning: str

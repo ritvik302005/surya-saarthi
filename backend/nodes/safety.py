@@ -1,4 +1,4 @@
-from config import CYCLE_HOURS, BATTERY_RESERVE_PCT, BATTERY_MAX_CHARGE_KW, BATTERY_MAX_DISCHARGE_KW
+from config import CYCLE_HOURS, BATTERY_RESERVE_PCT, BATTERY_MAX_CHARGE_KW, BATTERY_MAX_DISCHARGE_KW, GRID_EXPORT_LIMIT_KW
 
 TOLERANCE_KW = 0.01  # ignore rounding-level differences so overrides only fire on real violations
 
@@ -74,7 +74,14 @@ def enforce_safety_node(state):
         battery_used = -(charge_kw + extra) if charge_kw + extra > 0 else 0.0   # avoid -0.0
         solar_used = solar_for_load
 
+    # --- Check 5: whatever solar is left after load and battery is exported (net metering) ---
+    solar_to_battery = max(0, -battery_used)
+    surplus = max(0, solar_available - solar_used - solar_to_battery)
+    export_kw = min(surplus, GRID_EXPORT_LIMIT_KW)
+
     decision["solar_used_kw"] = round(solar_used, 2)
+    decision["grid_export_kw"] = round(export_kw, 2)
+    decision["solar_curtailed_kw"] = round(surplus - export_kw, 2)
     decision["battery_used_kw"] = round(battery_used, 2)
     decision["grid_used_kw"] = round(grid_used, 2)
     decision["defer_loads"] = defer_loads

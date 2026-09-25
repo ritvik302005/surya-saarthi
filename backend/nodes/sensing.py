@@ -101,7 +101,10 @@ def read_and_forecast_node(state):
     # passing-cloud noise, so the forecast can be wrong and the agent replans.
     forecast_now = series[sim_hour % len(series)] * scenario["multiplier"]
     current_irr = forecast_now * cloud_noise(scenario["variability"])
-    next_irr = series[(sim_hour + 1) % len(series)] * scenario["multiplier"]
+    forecast_next_hours = [
+        irradiance_to_kw(series[(sim_hour + k) % len(series)] * scenario["multiplier"])
+        for k in range(1, config.SOLAR_FORECAST_HOURS + 1)
+    ]
 
     critical_load_kw, new_loads = simulate_demand(sim_hour)
     flexible_loads = merge_flexible_loads(state.get("flexible_loads", []), new_loads, sim_hour % 24)
@@ -112,7 +115,8 @@ def read_and_forecast_node(state):
         "scenario": scenario_key,
         "previous_forecast_kw": state.get("forecast_solar_kw"),  # what last cycle predicted for right now
         "solar_kw": irradiance_to_kw(current_irr),
-        "forecast_solar_kw": irradiance_to_kw(next_irr),
+        "forecast_solar_kw": forecast_next_hours[0],
+        "solar_forecast_next_hours": forecast_next_hours,
         "critical_load_kw": critical_load_kw,
         "flexible_loads": flexible_loads,
         "new_flexible_loads": new_loads,   # this hour's arrivals only, used by the rule-based baseline

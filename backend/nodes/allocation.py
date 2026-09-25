@@ -27,6 +27,10 @@ Rules:
   soonest deadline_hour LAST. Loads with must_run=true are at their deadline and must
   never be deferred.
 - Prefer solar over battery, and battery over grid, in that order, for serving load.
+- Solar left over after load and battery charging is exported to the grid automatically, but
+  export earns only Rs {config.EXPORT_CREDIT_RS_PER_KWH}/kWh, far less than buying power at peak,
+  so storing solar for the evening is usually worth more than exporting it.
+- Use the multi-hour solar forecast: if clouds are coming, keep more battery in reserve.
 - Grid price changes by time of day. Save battery charge for expensive peak hours, and
   when a flexible load must use grid power, run it in a cheaper hour before its deadline
   instead of piling every deferred load into the last hour.
@@ -165,11 +169,15 @@ def plan_allocation_node(state):
     upcoming_prices = ", ".join(
         f"{(hour_now + k) % 24:02d}h Rs {config.grid_price_for_hour((hour_now + k) % 24)}" for k in range(1, 9)
     )
+    solar_forecast = state.get("solar_forecast_next_hours") or [state["forecast_solar_kw"]]
+    solar_forecast_text = ", ".join(
+        f"{(hour_now + k + 1) % 24:02d}h {kw} kW" for k, kw in enumerate(solar_forecast)
+    )
     human_prompt = f"""
 Weather scenario: {state.get('scenario', 'normal')}
 Simulated hour: {state.get('sim_hour', 0)} (hour-of-day {state.get('sim_hour', 0) % 24})
 Solar available: {state['solar_kw']} kW
-Forecast next hour: {state['forecast_solar_kw']} kW
+Solar forecast next {len(solar_forecast)} hours: {solar_forecast_text}
 Battery: {state['battery_soc_pct']}% of {state['battery_capacity_kwh']} kWh capacity
 Critical load: {state['critical_load_kw']} kW
 Flexible loads: {flexible_summary}

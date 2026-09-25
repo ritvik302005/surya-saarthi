@@ -15,6 +15,11 @@ SYSTEM_CAPACITY_KW = 10.0
 BATTERY_MAX_CHARGE_KW = 5.0      # new: caps how fast the battery can absorb surplus solar
 BATTERY_MAX_DISCHARGE_KW = 5.0   # new: absolute discharge-rate ceiling, on top of the reserve floor
 
+# --- Net metering (PM Surya Ghar rooftop systems can export surplus solar) ---
+GRID_EXPORT_LIMIT_KW = SYSTEM_CAPACITY_KW   # can't export more than the inverter/system size
+EXPORT_CREDIT_RS_PER_KWH = 3.0   # ASSUMPTION: credit per exported kWh; varies by state/DISCOM, set to your local rate
+SOLAR_FORECAST_HOURS = 8         # how many hours of solar forecast the agent sees
+
 # --- Time-of-Day grid tariff (Electricity (Rights of Consumers) Amendment Rules, 2023:
 # solar hours at least 20% cheaper, peak hours at least 20% costlier than normal) ---
 BASE_TARIFF_RS_PER_KWH = 8.0
