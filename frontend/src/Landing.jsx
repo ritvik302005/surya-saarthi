@@ -41,12 +41,12 @@ function Reveal({ children, className = '', delay = 0 }) {
 }
 
 const STAGES = [
-  { name: 'Sense', desc: 'Pulls live solar irradiance and reads current demand — real weather data, not a guess.' },
-  { name: 'Allocate', desc: "An LLM reasons about the safest split across solar, battery, and grid, and explains why." },
+  { name: 'Sense', desc: 'Pulls real solar irradiance for the site from a live weather API, plus an 8-hour forecast, and reads a simulated demand profile.' },
+  { name: 'Allocate', desc: "An LLM weighs solar, battery, grid and time-of-day prices, decides what to store, export or defer, and explains why." },
   { name: 'Safety limits', desc: "A hard, non-negotiable rule check — the model's suggestion can be overridden, never the reserve floor." },
   { name: 'Apply', desc: "Battery charge updates for real, and this cycle's forecast is compared against what was actually predicted." },
   { name: 'Replan', desc: 'If the forecast was wrong by enough to matter, it loops back and decides again, more conservatively.' },
-  { name: 'Report', desc: 'Savings and carbon avoided are computed against a grid-only baseline, and logged.' },
+  { name: 'Report', desc: 'Savings and carbon avoided are computed against a grid-only baseline, and compared live with a fixed-rule controller.' },
 ]
 
 export default function Landing({ onStart }) {

@@ -1,6 +1,11 @@
-fastapi
-uvicorn[standard]
-langgraph
-langchain-groq
-python-dotenv
-requests
+# Pinned to the versions the project was tested with, so a redeploy can't
+# silently pick up a breaking release. Upgrade deliberately and re-run the tests.
+fastapi==0.141.1
+uvicorn[standard]==0.52.4
+langgraph==1.2.11
+langchain-core==1.4.9
+langchain-groq==1.1.3
+groq==0.37.1
+pydantic==2.13.5
+python-dotenv==1.2.2
+requests==2.32.5
