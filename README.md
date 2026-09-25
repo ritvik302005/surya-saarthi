@@ -1,6 +1,8 @@
-# Microgrid Agent
+# Surya Saarthi
 
-An agentic controller for a solar + battery + grid microgrid. Instead of falling back to the grid whenever solar/battery run low, or using static rule-based thresholds, this agent actually reasons about the current state (solar output, battery charge, demand) each cycle and decides how to allocate load — while hard safety limits stay in place to override it if it ever proposes something unsafe.
+*Steering every unit of sunshine to where it’s worth the most.*
+
+**Surya Saarthi** (सूर्य सारथी, "charioteer of the sun") is an agentic controller for a solar + battery + grid microgrid. Instead of falling back to the grid whenever solar/battery run low, or using static rule-based thresholds, this agent actually reasons about the current state (solar output, battery charge, demand) each cycle and decides how to allocate load — while hard safety limits stay in place to override it if it ever proposes something unsafe.
 
 Built around SDG 7 (affordable and clean energy), targeting the kind of decentralized rooftop solar + battery setups you'd see under schemes like PM Surya Ghar or in a campus/community microgrid.
 

@@ -1,4 +1,4 @@
-# Microgrid Control — UI/UX Document
+# Surya Saarthi — UI/UX Document
 
 | | |
 |---|---|
@@ -45,11 +45,11 @@ journey
 Landing (/)                       Dashboard (same URL, view state)
 ├─ Nav: brand · GitHub · Open dashboard      ├─ Header: brand · scenario · days · Run simulation
 ├─ Hero + CTA "See it decide"                │          · ← Overview · History report · Reset session · Run cycle
-├─ Results strip (Planned)                   ├─ Simulation progress bar (while running)
+├─ Results strip (hidden until data)                ├─ Simulation progress bar (while running)
 ├─ The problem                               ├─ Intro + pipeline stepper
 ├─ How it decides (6 stages)                 ├─ Situation panel
-├─ What it manages (Planned)                 ├─ Energy flow + deferred jobs strip
-├─ Who it's for (Planned)                    ├─ Reasoning quote (+ "Replanned" badge)
+├─ What it manages                           ├─ Energy flow + deferred jobs strip
+├─ Who it's for                              ├─ Reasoning quote (+ "Replanned" badge)
 ├─ Safety statement                          ├─ Cards: Battery reserve · Safety overrides · Session impact
 ├─ Live-demo CTA                             ├─ Agent vs rule-based card (+ CSV link)
 └─ Footer: loop · SDG 7 · GitHub             ├─ Power-mix history chart
@@ -60,16 +60,16 @@ Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is 
 
 ## 4. Screens
 
-### 4.1 Landing — Done (sections marked Planned)
+### 4.1 Landing — Done
 | Section | Content | Notes |
 |---|---|---|
-| Nav (sticky) | Brand dot + "Microgrid Control"; *GitHub* (ghost); *Open dashboard* (outline) | Backdrop blur, hairline bottom border |
+| Nav (sticky) | Brand dot + "Surya Saarthi" (name, tagline, SIH ID and team name live in `src/brand.js`); *GitHub* (ghost); *Open dashboard* (outline) | Backdrop blur, hairline bottom border |
 | Hero | Badge "SDG 7 · Affordable & Clean Energy"; H1 "The sun doesn't send an invoice. Most microgrids waste it anyway."; plain-language sub-line; liquid-glass CTA *See it decide →*; scroll cue | WebGL background at 60% opacity (lazy, hidden for reduced motion) |
-| Results strip — **Planned** | 3–4 stat tiles from `sample_results/`: % less grid than rules, ₹ saved/day, % solar used on site, 0 essential outages | Each tile has a caption naming the baseline |
-| The problem | Eyebrow, H2 statement, one paragraph | Add PM Surya Ghar + 2023 ToD rules (Planned) |
+| Results strip | 4 tiles from `src/data/results-summary.json` (written by `run_scenarios.py`): cost reduction range, grid reduction range, ₹ saved/day vs rules, essential-load outages; note line with method | Hidden while the summary has no scenarios, so unvalidated numbers never show |
+| The problem | Eyebrow, H2 statement, two paragraphs (PM Surya Ghar; 2023 ToD rules) | |
 | How it decides | Six numbered rows: Sense, Allocate, Safety limits, Apply, Replan, Report | Reveal on scroll |
-| What it manages — **Planned** | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
-| Who it's for — **Planned** | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
+| What it manages | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
+| Who it's for | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
 | Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph | Centered |
 | Live-demo CTA | Eyebrow, H2, *Start live session →* over animated waves | Dark radial panel behind text for contrast |
 | Footer | Loop summary; SDG 7 · Source on GitHub | Mono, small |

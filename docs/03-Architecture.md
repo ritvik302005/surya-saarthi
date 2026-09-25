@@ -1,4 +1,4 @@
-# Microgrid Control — System Architecture
+# Surya Saarthi — System Architecture
 
 | | |
 |---|---|
@@ -142,7 +142,7 @@ Error convention (target, SRS FR-API6/7): `400` invalid input, `404` nothing to 
 |---|---|---|
 | Session state + history | Process memory | Until restart or LRU eviction |
 | Irradiance cache | Process memory | Refreshed at run start if > 6 h old |
-| Server log | `backend/logs/microgrid_log.txt` | Append-only on disk (ephemeral on Render free tier) |
+| Server log | `backend/logs/surya_saarthi_log.txt` | Append-only on disk (ephemeral on Render free tier) |
 | Saved demo results | `backend/sample_results/*.json` | In git |
 | Secrets | Environment (`GROQ_API_KEY`) | Host settings; `.env` locally (git-ignored) |
 
@@ -172,7 +172,7 @@ Free-tier notes: Render sleeps after inactivity (~50 s cold start) — open `/he
 
 Kept deliberately light for the MVP:
 - **Health:** `/health` checked by Render; optional external uptime ping.
-- **Logs:** Uvicorn access log + `ALLOCATION ERROR` tracebacks in the Render log stream; per-cycle entries in `microgrid_log.txt`.
+- **Logs:** Uvicorn access log + `ALLOCATION ERROR` tracebacks in the Render log stream; per-cycle entries in `surya_saarthi_log.txt`.
 - **Product signals already computed per run:** `ai_fallback_hours`, `safety_override_hours`, replans. A rising fallback count means API or quota trouble.
 - Next step if needed: structured JSON logs and a simple counter endpoint (`/metrics`) — not a full observability stack.
 

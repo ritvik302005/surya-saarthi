@@ -2,13 +2,15 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LiquidButton } from '@/components/ui/liquid-glass-button'
+import { Sun, BatteryCharging, UtilityPole, Droplets, CarFront, House, GraduationCap, Tractor } from 'lucide-react'
+import ResultsStrip from './ResultsStrip.jsx'
+import { PRODUCT_NAME, TAGLINE, REPO_URL, SIH_PS_ID, SIH_PS_TITLE, TEAM_NAME } from './brand.js'
 import './Landing.css'
 
 // The animated backgrounds pull in three.js and simplex-noise; load them after
 // the page is up so the first paint doesn't wait on ~500 KB of decoration.
 const WebGLShader = lazy(() => import('@/components/ui/web-gl-shader').then((m) => ({ default: m.WebGLShader })))
 const Waves = lazy(() => import('@/components/ui/wave-background').then((m) => ({ default: m.Waves })))
-const REPO_URL = 'https://github.com/ritvik302005/microgrid-agent'
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false)
@@ -53,6 +55,20 @@ const STAGES = [
   { name: 'Report', desc: 'Savings and carbon avoided are computed against a grid-only baseline, and compared live with a fixed-rule controller.' },
 ]
 
+const MANAGES = [
+  { icon: Sun, name: 'Solar panels', desc: 'Uses sunshine first, and knows the next 8 hours of forecast.', color: 'text-solar' },
+  { icon: BatteryCharging, name: 'Battery', desc: 'Stores cheap daytime sun for the costly evening peak. Never below 20%.', color: 'text-battery' },
+  { icon: UtilityPole, name: 'Grid', desc: 'Buys only what solar and battery can\u2019t cover; exports the rest under net metering.', color: 'text-grid' },
+  { icon: Droplets, name: 'Water pump', desc: 'A flexible job: waits for sunshine, but always runs before its deadline.', color: 'text-battery' },
+  { icon: CarFront, name: 'EV charging', desc: 'Moved out of the peak-price hours, finished by morning.', color: 'text-solar' },
+]
+
+const AUDIENCE = [
+  { icon: House, name: 'Rooftop solar homes', desc: 'Households with solar and a battery under PM Surya Ghar Muft Bijli Yojana: lower bills without micromanaging.' },
+  { icon: GraduationCap, name: 'Colleges and campuses', desc: 'Get more from solar already installed: cut peak-hour costs and schedule pumps and EV charging.' },
+  { icon: Tractor, name: 'Village and farm microgrids', desc: 'Keep essential supply reliable and run solar pumps on sunshine instead of peak-price grid power.' },
+]
+
 export default function Landing({ onStart }) {
   const reducedMotion = usePrefersReducedMotion()
 
@@ -61,7 +77,7 @@ export default function Landing({ onStart }) {
       <nav className="sticky top-0 z-20 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-border bg-background/85 backdrop-blur-sm">
         <span className="flex items-center gap-2.5 font-display font-semibold">
           <span className="h-2 w-2 rounded-full bg-battery" />
-          Microgrid Control
+          {PRODUCT_NAME}
         </span>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" nativeButton={false}
@@ -75,7 +91,7 @@ export default function Landing({ onStart }) {
         <div className="hero-fade" />
 
         <Badge variant="outline" className="relative z-10 mb-5 font-mono text-[0.7rem] tracking-wider text-battery border-battery/30 uppercase">
-          SDG 7 · Affordable &amp; Clean Energy
+          {PRODUCT_NAME} · AI for solar microgrids
         </Badge>
         <h1 className="relative z-10 font-display font-semibold text-[clamp(2.2rem,5.5vw,4.2rem)] leading-[1.08] tracking-tight max-w-3xl mb-5">
           The sun doesn't send an invoice.<br />Most microgrids waste it anyway.
@@ -90,16 +106,21 @@ export default function Landing({ onStart }) {
         <div className="scroll-cue relative z-10" aria-hidden="true"><span />Scroll</div>
       </section>
 
+      <ResultsStrip />
+
       <section className="landing-section">
         <Reveal><span className="section-eyebrow">The problem</span></Reveal>
         <Reveal delay={80}>
           <h2>Most rooftop and campus solar falls back to the grid the moment a cloud rolls in — not because there's no better option, but because nothing is watching closely enough to find one.</h2>
         </Reveal>
         <Reveal delay={140} className="landing-text">
-          <p>India's decentralized solar push — rooftop subsidies, campus microgrids, community
-            batteries — is growing fast on hardware. The software controlling it is mostly still a
-            fixed threshold: pull from grid below a fixed battery percentage, no matter what the
-            weather is about to do, no matter what's actually plugged in.</p>
+          <p>India's decentralized solar push — PM Surya Ghar Muft Bijli Yojana rooftops, campus
+            microgrids, community batteries — is growing fast on hardware. The software controlling it
+            is mostly still a fixed threshold: pull from grid below a fixed battery percentage, no
+            matter what the weather is about to do, no matter what's actually plugged in.</p>
+          <p>And since the 2023 Time-of-Day tariff rules, <em>when</em> you use power matters: at least
+            20% cheaper during solar hours, at least 20% costlier at the evening peak. A fixed rule can't
+            take advantage of that. {PRODUCT_NAME} can.</p>
         </Reveal>
       </section>
 
@@ -113,6 +134,34 @@ export default function Landing({ onStart }) {
                 <h3 className="font-display">{s.name}</h3>
                 <p>{s.desc}</p>
               </div>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <Reveal><span className="section-eyebrow">What it manages</span></Reveal>
+        <Reveal delay={80}><h2>Five things, decided together every hour.</h2></Reveal>
+        <div className="card-grid five">
+          {MANAGES.map((m, i) => (
+            <Reveal key={m.name} delay={120 + i * 50} className="info-card">
+              <m.icon className={`h-6 w-6 ${m.color}`} aria-hidden="true" />
+              <h3 className="font-display">{m.name}</h3>
+              <p>{m.desc}</p>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      <section className="landing-section">
+        <Reveal><span className="section-eyebrow">Who it's for</span></Reveal>
+        <Reveal delay={80}><h2>Anywhere solar and a battery share a roof with the grid.</h2></Reveal>
+        <div className="card-grid three">
+          {AUDIENCE.map((a, i) => (
+            <Reveal key={a.name} delay={120 + i * 60} className="info-card">
+              <a.icon className="h-6 w-6 text-battery" aria-hidden="true" />
+              <h3 className="font-display">{a.name}</h3>
+              <p>{a.desc}</p>
             </Reveal>
           ))}
         </div>
@@ -144,7 +193,9 @@ export default function Landing({ onStart }) {
       </section>
 
       <footer className="landing-footer">
-        <span>Sense → Allocate → Safety limits → Apply → Replan if needed → Report</span>
+        <span className="block font-display text-sm text-foreground">{PRODUCT_NAME}</span>
+        <span className="block mt-1">{TAGLINE}</span>
+        <span className="block mt-3">Smart India Hackathon 2026 · {SIH_PS_ID} · {SIH_PS_TITLE}{TEAM_NAME ? ` · Team ${TEAM_NAME}` : ''}</span>
         <span className="block mt-2">SDG 7 · Affordable &amp; Clean Energy · <a href={REPO_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Source on GitHub</a></span>
       </footer>
     </div>

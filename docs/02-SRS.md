@@ -1,4 +1,4 @@
-# Microgrid Control — Software Requirements Specification (SRS)
+# Surya Saarthi — Software Requirements Specification (SRS)
 
 | | |
 |---|---|
@@ -133,7 +133,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 
 ### 5.3 Persistence and retention
 - Session state and history: in memory only; lost on server restart; evicted by LRU (FR-API2).
-- Server log `backend/logs/microgrid_log.txt`: append-only text, all sessions (operator only).
+- Server log `backend/logs/surya_saarthi_log.txt`: append-only text, all sessions (operator only).
 - Saved results: `backend/sample_results/<scenario>.json` (versioned in git).
 - No personal data is collected.
 

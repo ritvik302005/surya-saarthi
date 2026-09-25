@@ -1,4 +1,5 @@
 import { Card, CardTitle, CardDescription } from '@/components/ui/card'
+import { PRODUCT_NAME } from './brand.js'
 
 function Stat({ value, label, tone }) {
   return (
@@ -34,7 +35,7 @@ export default function ComparisonCard({ comparison, csvUrl }) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal mb-1.5">
-              Agent vs rule-based controller
+              {PRODUCT_NAME} vs rule-based controller
             </CardTitle>
             <CardDescription>
               Same sunlight and demand, {c.hours} hour{c.hours !== 1 ? 's' : ''}. The rule-based controller uses solar,
@@ -47,7 +48,7 @@ export default function ComparisonCard({ comparison, csvUrl }) {
         </div>
 
         <div className="flex flex-col gap-2.5">
-          <Bar label="Agent grid use" kwh={c.agent_grid_kwh} max={max} className="bg-battery" />
+          <Bar label={PRODUCT_NAME} kwh={c.agent_grid_kwh} max={max} className="bg-battery" />
           <Bar label="Rule-based grid" kwh={c.rule_grid_kwh} max={max} className="bg-grid" />
         </div>
 

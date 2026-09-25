@@ -1,0 +1,5 @@
+{
+ "source": "backend/run_scenarios.py",
+ "note": "Empty until a validated scenario run is saved; the landing results strip stays hidden.",
+ "scenarios": {}
+}

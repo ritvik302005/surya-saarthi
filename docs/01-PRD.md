@@ -1,8 +1,8 @@
-# Microgrid Control — Product Requirements Document (PRD)
+# Surya Saarthi — Product Requirements Document (PRD)
 
 | | |
 |---|---|
-| Product | Microgrid Control: an AI agent for solar + battery + grid microgrids |
+| Product | **Surya Saarthi** ("charioteer of the sun"): an AI agent for solar + battery + grid microgrids |
 | Context | Smart India Hackathon 2026, PS **SIH26200** (AICTE) — "Innovative ideas that help manage and generate renewable / sustainable sources more efficiently" · Theme: Renewable / Sustainable Energy · Category: Software |
 | Status | MVP built (simulation-backed); this document defines the MVP and what is deliberately left out |
 | Related | [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [05-Development-Plan](05-Development-Plan.md) |

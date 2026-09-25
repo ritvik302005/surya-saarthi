@@ -1,4 +1,4 @@
-# Microgrid Control — Development Plan
+# Surya Saarthi — Development Plan
 
 | | |
 |---|---|
@@ -46,8 +46,8 @@ Estimates are for one developer; tasks in the same milestone without a dependenc
 | 5.1 | Generate `sample_results/*.json` (2 days × 4 scenarios) with `run_scenarios.py` on the final M4 code; commit | PRD F15 | M4 | 0.5 h run + review |
 | 5.2 | Backend `GET /samples` (list) and `GET /samples/{scenario}` (JSON), read from `sample_results/` | FR-UI8 | 5.1 | 1 h |
 | 5.3 | Dashboard *Load saved results*: scenario menu → render state/chart/comparison from the file, badge "Saved run", no AI calls | FR-UI8 | 5.2 | 3 h |
-| 5.4 | Landing results strip: 3–4 tiles built at build time from `sample_results` (import JSON) with baseline captions | FR-UI9 | 5.1 | 2 h |
-| 5.5 | Landing "What it manages" (5 cards) and "Who it's for" (3 cards); problem paragraph adds PM Surya Ghar + 2023 ToD rules | UI/UX §4.1 | — | 2 h |
+| 5.4 | Landing results strip — **component done** (reads `src/data/results-summary.json`, hidden while empty); fill by running 5.1 | FR-UI9 | 5.1 | 0.25 h |
+| 5.5 | Landing "What it manages", "Who it's for", PM Surya Ghar + ToD line, SIH footer — **Done** | UI/UX §4.1 | — | — |
 | 5.6 | Hash route `#/dashboard` so back button and shared links work | UI/UX §3 | — | 1 h |
 | 5.7 | Mobile header: collapse Overview / History / Reset into a "More" menu below 640 px | UI/UX §10 | — | 2 h |
 | 5.8 | Screen-reader text under the energy flow ("Solar 3.2 kW to load, battery charging 1.5 kW…") | UI/UX §11 | — | 0.5 h |

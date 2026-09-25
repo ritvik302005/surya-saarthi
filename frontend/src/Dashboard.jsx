@@ -12,6 +12,7 @@ import ComparisonCard from './ComparisonCard.jsx'
 import SituationPanel from './SituationPanel.jsx'
 import { useCountUp } from './useCountUp.js'
 import { apiFetch, checkedJson, errorMessage, sessionUrl } from './api.js'
+import { PRODUCT_NAME } from './brand.js'
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -216,7 +217,7 @@ export default function Dashboard({ onBack }) {
         <header className="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-border bg-background/85 backdrop-blur-sm">
           <div className="flex items-center gap-2.5 font-display font-semibold tracking-tight">
             <span className={`h-2 w-2 rounded-full ${loading ? 'bg-solar animate-pulse' : state ? 'bg-battery' : 'bg-muted-foreground'}`} />
-            Microgrid Control
+            {PRODUCT_NAME}
           </div>
           <div className="flex items-center gap-3 flex-wrap justify-end">
             <div className="flex items-center gap-2 font-mono text-xs">

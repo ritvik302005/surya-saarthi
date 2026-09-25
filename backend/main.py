@@ -20,7 +20,7 @@ from baseline import rule_based_step
 from graph import graph
 from nodes.sensing import refresh_irradiance_if_stale
 
-app = FastAPI(title="Microgrid Load Balancer API")
+app = FastAPI(title="Surya Saarthi API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -30,7 +30,7 @@ app.add_middleware(
 )
 
 LOG_DIR = "logs"
-LOG_PATH = os.path.join(LOG_DIR, "microgrid_log.txt")
+LOG_PATH = os.path.join(LOG_DIR, "surya_saarthi_log.txt")
 os.makedirs(LOG_DIR, exist_ok=True)
 
 MAX_SESSIONS = 100   # oldest idle sessions are dropped beyond this
@@ -274,7 +274,7 @@ def download_log(x_session_id: Optional[str] = Header(None), session: Optional[s
     if not history:
         return {"error": "No cycles yet — run at least one cycle first."}
     return PlainTextResponse("".join(format_log_entry(e) for e in history),
-                             headers={"Content-Disposition": "attachment; filename=microgrid_log.txt"})
+                             headers={"Content-Disposition": "attachment; filename=surya_saarthi_log.txt"})
 
 
 @app.get("/history/csv")
@@ -292,7 +292,7 @@ def download_csv(x_session_id: Optional[str] = Header(None), session: Optional[s
     writer.writeheader()
     writer.writerows(history)
     return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv",
-                             headers={"Content-Disposition": "attachment; filename=microgrid_results.csv"})
+                             headers={"Content-Disposition": "attachment; filename=surya_saarthi_results.csv"})
 
 
 @app.post("/reset")
