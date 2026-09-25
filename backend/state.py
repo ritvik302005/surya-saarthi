@@ -8,6 +8,7 @@ class GridState(TypedDict):
     battery_capacity_kwh: float
     critical_load_kw: float
     flexible_loads: List[Dict]
+    new_flexible_loads: List[Dict]
     grid_price_per_kwh: float
     forecast_solar_kw: float
     previous_forecast_kw: Optional[float]

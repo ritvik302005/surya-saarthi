@@ -1,5 +1,6 @@
 CYCLE_HOURS = 1.0               # each planning cycle represents one simulated hour (sim_hour advances by 1)
 BATTERY_RESERVE_PCT = 20.0      # never discharge the battery below this level
+INITIAL_BATTERY_SOC_PCT = 60.0  # battery level at the start of every run (agent and baseline)
 DEVIATION_THRESHOLD_KW = 1.0    # forecast vs actual gap that triggers a replan
 
 # --- LLM + impact accounting ---

@@ -108,7 +108,8 @@ def read_and_forecast_node(state):
         "forecast_solar_kw": irradiance_to_kw(next_irr),
         "critical_load_kw": critical_load_kw,
         "flexible_loads": flexible_loads,
-        "battery_soc_pct": state.get("battery_soc_pct", 60.0),
+        "new_flexible_loads": new_loads,   # this hour's arrivals only, used by the rule-based baseline
+        "battery_soc_pct": state.get("battery_soc_pct", config.INITIAL_BATTERY_SOC_PCT),
         "battery_capacity_kwh": state.get("battery_capacity_kwh", 10.0),
         "grid_price_per_kwh": config.grid_price_for_hour(sim_hour % 24),
         # Alerts belong to the current cycle. A replan does not pass through

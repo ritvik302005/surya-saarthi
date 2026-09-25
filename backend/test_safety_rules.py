@@ -62,6 +62,12 @@ assert out["decision"]["battery_used_kw"] == -1.0, out["decision"]
 out = enforce_safety_node(base_state(solar_kw=3.0, decision=decide(solar=3.0, grid=2.0)))
 assert out["decision"]["grid_used_kw"] == 0.0, out["decision"]
 
+# 7b. Surplus solar the allocator forgot to store is charged into the battery
+out = enforce_safety_node(base_state(solar_kw=6.0, battery_soc_pct=50.0, decision=decide(solar=6.0)))
+assert out["decision"]["battery_used_kw"] == -3.0 and out["decision"]["solar_used_kw"] == 6.0, out["decision"]
+out = enforce_safety_node(base_state(solar_kw=9.0, battery_soc_pct=50.0, decision=decide(solar=3.0)))
+assert out["decision"]["battery_used_kw"] == -5.0, out["decision"]   # 5 kW charge-rate cap
+
 # 8. Deferred jobs carry forward and become must_run in their last hour
 ev = {"name": "ev_charging (22:00)", "power_kw": 3.0, "deadline_hour": 6, "deferred": True}
 ran = {**pump, "deferred": False}
@@ -77,4 +83,12 @@ assert report["served_load_kw"] == 4.5, report
 assert report["savings_rs"] == round((4.5 - 1.5) * 8.0, 2), report
 assert report["deferred_loads"] == [ev["name"]], report
 
-print("Safety rules, load carry-over and report checks passed.")
+# 10. Rule-based baseline: solar, then battery to reserve, then grid; surplus charges
+from baseline import rule_based_step
+night = rule_based_step(22.0, 10.0, 0.0, 3.0, [pump], 8.0)
+assert night["battery_kw"] == 0.2 and night["grid_kw"] == 4.3, night
+assert night["cost_rs"] == round(4.3 * 8.0, 2), night
+sunny = rule_based_step(50.0, 10.0, 6.0, 3.0, [], 6.4)
+assert sunny["grid_kw"] == 0 and sunny["battery_kw"] == -3.0 and sunny["soc_pct"] == 80.0, sunny
+
+print("Safety rules, load carry-over, report and baseline checks passed.")
