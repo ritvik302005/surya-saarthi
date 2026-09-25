@@ -71,7 +71,7 @@ def enforce_safety_node(state):
         leftover = max(0, solar_available - solar_for_load - charge_kw)
         room_kw = max(0, (100.0 - state["battery_soc_pct"]) / 100 * state["battery_capacity_kwh"]) / CYCLE_HOURS
         extra = min(leftover, max(0, room_kw - charge_kw), max(0, BATTERY_MAX_CHARGE_KW - charge_kw))
-        battery_used = -(charge_kw + extra)
+        battery_used = -(charge_kw + extra) if charge_kw + extra > 0 else 0.0   # avoid -0.0
         solar_used = solar_for_load
 
     decision["solar_used_kw"] = round(solar_used, 2)
