@@ -21,7 +21,8 @@ Rules:
   of wasting it. Represent charging as a NEGATIVE battery_used_kw.
 - Flexible loads may be deferred if solar and battery (above reserve) cannot cover them
   without using the grid. If multiple loads must be deferred, defer the one with the
-  soonest deadline_hour LAST.
+  soonest deadline_hour LAST. Loads with must_run=true are at their deadline and must
+  never be deferred.
 - Prefer solar over battery, and battery over grid, in that order, for serving load.
 
 Return one JSON object with exactly these fields:
@@ -71,7 +72,7 @@ def _fallback_decision(state):
         "solar_used_kw": round(solar_for_critical, 2),
         "battery_used_kw": 0.0,
         "grid_used_kw": round(max(0.0, float(state["critical_load_kw"]) - solar_for_critical), 2),
-        "defer_loads": [load["name"] for load in state["flexible_loads"]],
+        "defer_loads": [load["name"] for load in state["flexible_loads"] if not load.get("must_run")],
         "reasoning": "Safety override applied a deterministic allocation after the allocator response was unavailable.",
     }
 
@@ -121,7 +122,8 @@ def _validated_decision(parsed, state):
 
 def plan_allocation_node(state):
     flexible_summary = [
-        {"name": load["name"], "power_kw": load["power_kw"], "deadline_hour": load["deadline_hour"]}
+        {"name": load["name"], "power_kw": load["power_kw"], "deadline_hour": load["deadline_hour"],
+         "must_run": load.get("must_run", False)}
         for load in state["flexible_loads"]
     ]
     human_prompt = f"""
