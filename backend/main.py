@@ -82,11 +82,8 @@ def _run_one_cycle():
         "solar_kw": decision.get("solar_used_kw", 0),
         "battery_kw": decision.get("battery_used_kw", 0),
         "grid_kw": decision.get("grid_used_kw", 0),
-        "load_kw": round(
-            (decision.get("solar_used_kw", 0) or 0)
-            + max(0, decision.get("battery_used_kw", 0) or 0)
-            + (decision.get("grid_used_kw", 0) or 0), 2
-        ),
+        "load_kw": report.get("served_load_kw", 0),
+        "deferred_loads": report.get("deferred_loads", []),
         "battery_soc_pct": current_state.get("battery_soc_pct", 0),
         "reasoning": current_state.get("reasoning", ""),
         "alerts": current_state.get("alerts", []),
@@ -153,9 +150,7 @@ def simulate(options: SimulateOptions):
     total_savings = round(sum(c["savings_rs"] for c in cycle_history), 2)
     total_carbon_avoided = round(sum(c["carbon_avoided_kg"] for c in cycle_history), 2)
     total_replans = sum(1 for c in cycle_history if c["replanned"])
-    total_deferred_events = sum(1 for c in cycle_history if any(
-        l.get("deferred") for l in current_state.get("flexible_loads", [])
-    ))
+    total_deferred_events = sum(len(c["deferred_loads"]) for c in cycle_history)
 
     return {
         "scenario": options.scenario,
@@ -165,6 +160,7 @@ def simulate(options: SimulateOptions):
             "total_savings_rs": total_savings,
             "total_carbon_avoided_kg": total_carbon_avoided,
             "cycles_with_replan": total_replans,
+            "deferred_load_events": total_deferred_events,
             "final_battery_soc_pct": current_state.get("battery_soc_pct", 0),
         },
         "cycles": cycle_history,
