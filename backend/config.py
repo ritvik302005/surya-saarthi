@@ -5,7 +5,7 @@ DEVIATION_THRESHOLD_KW = 1.0    # forecast vs actual gap that triggers a replan
 
 # --- LLM + impact accounting ---
 LLM_MODEL = "openai/gpt-oss-20b"        # Groq model used by the allocate node
-LLM_MAX_ATTEMPTS = 4                    # retries on rate limits / malformed JSON before the safe fallback kicks in
+LLM_MAX_ATTEMPTS = 6                    # retries on rate limits / malformed JSON before the safe fallback kicks in
 GRID_EMISSION_FACTOR_KG_PER_KWH = 0.71  # India grid average, CEA CO2 Baseline Database v21.0 (Nov 2025)
 
 # --- Site + hardware, centralized (sensing.py used to hardcode these locally) ---

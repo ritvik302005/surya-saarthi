@@ -89,6 +89,11 @@ assert report["served_load_kw"] == 4.5, report
 assert report["savings_rs"] == round((4.5 - 1.5) * 8.0, 2), report
 assert report["deferred_loads"] == [ev["name"]], report
 
+# 9b. Replan flags reset every cycle (a replan must not stick to later hours)
+from nodes.sensing import read_and_forecast_node
+fresh = read_and_forecast_node({"sim_hour": 12, "replanned": True, "deviation_detected": True})
+assert fresh["replanned"] is False and fresh["deviation_detected"] is False, fresh
+
 # 10. Rule-based baseline: solar, then battery to reserve, then grid; surplus charges
 from baseline import rule_based_step
 night = rule_based_step(22.0, 10.0, 0.0, 3.0, [pump], 8.0)

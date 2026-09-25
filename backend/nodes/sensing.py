@@ -150,5 +150,10 @@ def read_and_forecast_node(state):
         "price_band": config.price_band_for_hour(sim_hour % 24),
         # Alerts belong to the current cycle. A replan does not pass through
         # sensing, so both interventions from that single cycle are retained.
-        "alerts": []
+        "alerts": [],
+        # Replan flags belong to one cycle too. Without this reset, the first
+        # replan stuck for the rest of the run: no further replans were
+        # possible and every later prompt got the "forecast was wrong" note.
+        "replanned": False,
+        "deviation_detected": False,
     }

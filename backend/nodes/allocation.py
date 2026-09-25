@@ -80,11 +80,12 @@ def _get_llm():
 def _retry_delay(error, attempt):
     """Groq's 429 message says how long to wait ("try again in 367.5ms" / "in 2.1s").
     Use that when present, otherwise back off exponentially."""
+    backoff = 2 ** attempt   # 1, 2, 4, 8, 16 s: token-per-minute limits need more than Groq's sub-second hint
     match = re.search(r"try again in ([\d.]+)(ms|s)", str(error))
     if match:
         seconds = float(match.group(1)) / (1000 if match.group(2) == "ms" else 1)
-        return min(seconds + 0.25, 20)
-    return min(2 ** attempt, 20)
+        return min(max(seconds + 0.25, backoff), 20)
+    return min(backoff, 20)
 
 
 def _invoke_with_retry(messages):
