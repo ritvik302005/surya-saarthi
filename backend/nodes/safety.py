@@ -60,6 +60,16 @@ def enforce_safety_node(state):
         # don't buy grid power nothing is using
         grid_used = max(0, grid_used - (supplied - demand_kw))
 
+    # --- Check 4: surplus solar is never wasted while the battery has room ---
+    if battery_used <= 0:
+        solar_for_load = min(solar_used, max(0, demand_kw - grid_used))
+        charge_kw = -battery_used
+        leftover = max(0, solar_available - solar_for_load - charge_kw)
+        room_kw = max(0, (100.0 - state["battery_soc_pct"]) / 100 * state["battery_capacity_kwh"]) / CYCLE_HOURS
+        extra = min(leftover, max(0, room_kw - charge_kw), max(0, BATTERY_MAX_CHARGE_KW - charge_kw))
+        battery_used = -(charge_kw + extra)
+        solar_used = solar_for_load + charge_kw + extra
+
     decision["solar_used_kw"] = round(solar_used, 2)
     decision["battery_used_kw"] = round(battery_used, 2)
     decision["grid_used_kw"] = round(grid_used, 2)
