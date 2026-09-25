@@ -1,6 +1,4 @@
-from config import CYCLE_HOURS
-
-GRID_EMISSION_FACTOR_KG_PER_KWH = 0.82  # approx India grid average — state this assumption in your writeup
+from config import CYCLE_HOURS, GRID_EMISSION_FACTOR_KG_PER_KWH
 
 def generate_report_node(state):
     decision = state["decision"]

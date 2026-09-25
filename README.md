@@ -15,10 +15,10 @@ sense → allocate → safety → apply → report
 ```
 
 - **sense** — pulls real solar irradiance for the site (via Open-Meteo) and combines it with a simulated demand profile, battery state, and grid price for the current cycle.
-- **allocate** — an LLM (Llama 3.1 8B via Groq) looks at the current state and proposes how much load to draw from solar, battery, and grid, plus which flexible/deferrable loads to postpone.
+- **allocate** — an LLM (`openai/gpt-oss-20b` via Groq, set in `config.LLM_MODEL`) looks at the current state and proposes how much load to draw from solar, battery, and grid, plus which flexible/deferrable loads to postpone.
 - **safety** — enforces hard limits regardless of what the LLM proposed: battery never discharges below the reserve floor, charge/discharge never exceeds the rate ceiling, critical loads are never dropped.
 - **apply** — applies the (possibly corrected) decision, updates battery state of charge, and checks whether real conditions deviated enough from the forecast to warrant a replan.
-- **report** — logs the cycle: grid usage, cost savings vs. an all-grid baseline, CO₂ avoided, and any safety overrides that kicked in.
+- **report** — logs the cycle: grid usage, cost savings vs. an all-grid baseline, CO₂ avoided (India grid factor 0.71 kg/kWh, CEA CO₂ Baseline Database v21.0), and any safety overrides that kicked in.
 
 If actual conditions drift too far from what was planned, the loop jumps back to `allocate` and replans before finishing the cycle.
 

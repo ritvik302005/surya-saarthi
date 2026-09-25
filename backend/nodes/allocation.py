@@ -16,7 +16,7 @@ demand while minimizing grid usage, protecting battery health, and not wasting s
 
 Rules:
 - Critical load must always be met, prioritizing solar, then battery, then grid.
-- Never suggest discharging the battery below a 20% state of charge reserve.
+- Never suggest discharging the battery below a {config.BATTERY_RESERVE_PCT:.0f}% state of charge reserve.
 - If solar generation exceeds current demand, charge the battery with the surplus instead
   of wasting it. Represent charging as a NEGATIVE battery_used_kw.
 - Flexible loads may be deferred if solar and battery (above reserve) cannot cover them
@@ -57,7 +57,7 @@ def _get_llm():
             raise RuntimeError("GROQ_API_KEY is not configured")
         llm = ChatGroq(
             groq_api_key=api_key,
-            model="openai/gpt-oss-20b",
+            model=config.LLM_MODEL,
             temperature=0,
             max_tokens=1024,
         )

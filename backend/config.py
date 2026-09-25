@@ -2,6 +2,10 @@ CYCLE_HOURS = 1.0               # each planning cycle represents one simulated h
 BATTERY_RESERVE_PCT = 20.0      # never discharge the battery below this level
 DEVIATION_THRESHOLD_KW = 1.0    # forecast vs actual gap that triggers a replan
 
+# --- LLM + impact accounting ---
+LLM_MODEL = "openai/gpt-oss-20b"        # Groq model used by the allocate node
+GRID_EMISSION_FACTOR_KG_PER_KWH = 0.71  # India grid average, CEA CO2 Baseline Database v21.0 (Nov 2025)
+
 # --- Site + hardware, centralized (sensing.py used to hardcode these locally) ---
 LATITUDE = 28.6139
 LONGITUDE = 77.2090
