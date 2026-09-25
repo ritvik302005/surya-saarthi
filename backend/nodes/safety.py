@@ -63,6 +63,8 @@ def enforce_safety_node(state):
         grid_used = max(0, grid_used - (supplied - demand_kw))
 
     # --- Check 4: surplus solar is never wasted while the battery has room ---
+    # solar_used_kw means solar serving load; solar going into the battery is
+    # represented only by a negative battery_used_kw (same as the prompt says).
     if battery_used <= 0:
         solar_for_load = min(solar_used, max(0, demand_kw - grid_used))
         charge_kw = -battery_used
@@ -70,7 +72,7 @@ def enforce_safety_node(state):
         room_kw = max(0, (100.0 - state["battery_soc_pct"]) / 100 * state["battery_capacity_kwh"]) / CYCLE_HOURS
         extra = min(leftover, max(0, room_kw - charge_kw), max(0, BATTERY_MAX_CHARGE_KW - charge_kw))
         battery_used = -(charge_kw + extra)
-        solar_used = solar_for_load + charge_kw + extra
+        solar_used = solar_for_load
 
     decision["solar_used_kw"] = round(solar_used, 2)
     decision["battery_used_kw"] = round(battery_used, 2)

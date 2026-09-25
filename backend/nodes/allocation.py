@@ -20,7 +20,8 @@ Rules:
 - Critical load must always be met, prioritizing solar, then battery, then grid.
 - Never suggest discharging the battery below a {config.BATTERY_RESERVE_PCT:.0f}% state of charge reserve.
 - If solar generation exceeds current demand, charge the battery with the surplus instead
-  of wasting it. Represent charging as a NEGATIVE battery_used_kw.
+  of wasting it. Represent charging as a NEGATIVE battery_used_kw. solar_used_kw is only the
+  solar that serves load; do not add the solar that goes into the battery to it.
 - Flexible loads may be deferred if solar and battery (above reserve) cannot cover them
   without using the grid. If multiple loads must be deferred, defer the one with the
   soonest deadline_hour LAST. Loads with must_run=true are at their deadline and must

@@ -64,7 +64,7 @@ assert out["decision"]["grid_used_kw"] == 0.0, out["decision"]
 
 # 7b. Surplus solar the allocator forgot to store is charged into the battery
 out = enforce_safety_node(base_state(solar_kw=6.0, battery_soc_pct=50.0, decision=decide(solar=6.0)))
-assert out["decision"]["battery_used_kw"] == -3.0 and out["decision"]["solar_used_kw"] == 6.0, out["decision"]
+assert out["decision"]["battery_used_kw"] == -3.0 and out["decision"]["solar_used_kw"] == 3.0, out["decision"]
 out = enforce_safety_node(base_state(solar_kw=9.0, battery_soc_pct=50.0, decision=decide(solar=3.0)))
 assert out["decision"]["battery_used_kw"] == -5.0, out["decision"]   # 5 kW charge-rate cap
 
