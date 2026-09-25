@@ -4,4 +4,4 @@ export const TAGLINE = 'Steering every unit of sunshine to where it’s worth th
 export const REPO_URL = 'https://github.com/ritvik302005/microgrid-agent'
 export const SIH_PS_ID = 'SIH26200'
 export const SIH_PS_TITLE = 'Renewable / Sustainable Energy'
-export const TEAM_NAME = ''   // set your SIH team name to show it in the landing footer
+export const TEAM_NAME = 'BOOMERS'   // shown in the landing footer; set to '' to hide
