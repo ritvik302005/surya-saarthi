@@ -38,6 +38,9 @@ export default function ResultsStrip() {
         Simulated on real Delhi weather data, {days} day{days !== 1 ? 's' : ''} per weather type
         ({runs.map((r) => r.label.toLowerCase()).join(', ')}), same sunlight and demand for both controllers.
         Assumptions are listed in the project README.
+        {summary.generated_at && (
+          <span className="results-date">Results generated on {new Date(summary.generated_at).toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}.</span>
+        )}
       </p>
     </section>
   )

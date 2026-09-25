@@ -64,6 +64,16 @@
 @media (max-width: 767px) { .card-grid.three { grid-template-columns: 1fr; } }
 @media (max-width: 480px) { .card-grid.five { grid-template-columns: 1fr; } }
 
+.faq-list { margin-top: 24px; display: flex; flex-direction: column; }
+.faq-item { border-bottom: 1px solid var(--border); }
+.faq-item summary { cursor: pointer; list-style: none; padding: 18px 32px 18px 0; font-weight: 600; font-size: 1.05rem; position: relative; }
+.faq-item summary::-webkit-details-marker { display: none; }
+.faq-item summary::after { content: '+'; position: absolute; right: 4px; top: 50%; transform: translateY(-50%); color: var(--battery); font-size: 1.3rem; transition: transform 0.2s; }
+.faq-item[open] summary::after { transform: translateY(-50%) rotate(45deg); }
+.faq-item summary:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+.faq-item p { color: var(--muted-foreground); font-size: 0.95rem; line-height: 1.65; margin: 0 0 18px; max-width: 680px; }
+.results-date { display: block; margin-top: 4px; }
+
 .cta-panel {
   /* dark backdrop so the heading stays readable over the wave lines */
   padding: 36px clamp(16px, 4vw, 48px);

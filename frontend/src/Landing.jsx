@@ -69,11 +69,22 @@ const AUDIENCE = [
   { icon: Tractor, name: 'Village and farm microgrids', desc: 'Keep essential supply reliable and run solar pumps on sunshine instead of peak-price grid power.' },
 ]
 
+const FAQ = [
+  { q: 'Is this running on real data?', a: 'Sunlight comes from a live weather API (Open-Meteo) for the site, with an 8-hour forecast. Demand is a simulated daily profile of a home or small campus, because we don\u2019t have smart-meter data yet. Every assumption is listed in the project README.' },
+  { q: 'What if the AI makes a wrong decision?', a: 'It can\u2019t act on it. Every decision passes through hard safety rules afterwards: the battery never goes below 20%, charge and discharge stay under 5 kW, essential loads are always powered and flexible jobs always finish before their deadline. When a rule steps in, the dashboard shows it.' },
+  { q: 'Does it need the internet?', a: 'The AI planner and live weather use the internet. If either is unavailable, a fixed safe allocation takes over for that hour, so power is never left undecided.' },
+  { q: 'How is it better than today\u2019s controllers?', a: 'A normal controller follows one rule: solar, then battery, then grid. Surya Saarthi also looks at time-of-day prices and the weather forecast, saves battery for the costly evening peak and moves pumps and EV charging to cheaper hours. A fixed-rule controller runs on the same inputs every hour, so the difference is measured, not claimed.' },
+  { q: 'What would it cost to use?', a: 'It is software only, built with free and open-source tools, and runs on a small server. It needs no new panels or batteries; a real site would add a link to its inverter or smart meter.' },
+  { q: 'Can it control real equipment?', a: 'Not yet. Today it runs as a simulation. The design keeps a clear place to connect an inverter or smart meter later, with the same safety rules in front of it.' },
+]
+
 export default function Landing({ onStart }) {
   const reducedMotion = usePrefersReducedMotion()
+  useEffect(() => { document.title = `${PRODUCT_NAME} — AI for solar microgrids` }, [])
 
   return (
     <div className="min-h-screen animate-in fade-in duration-500">
+      <a href="#content" className="skip-link">Skip to content</a>
       <nav className="sticky top-0 z-20 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-border bg-background/85 backdrop-blur-sm">
         <span className="flex items-center gap-2.5 font-display font-semibold">
           <span className="h-2 w-2 rounded-full bg-battery" />
@@ -106,6 +117,7 @@ export default function Landing({ onStart }) {
         <div className="scroll-cue relative z-10" aria-hidden="true"><span />Scroll</div>
       </section>
 
+      <div id="content" tabIndex={-1} className="outline-none" />
       <ResultsStrip />
 
       <section className="landing-section">
@@ -177,6 +189,18 @@ export default function Landing({ onStart }) {
             or a load would go unmet — the same reasoning-plus-hard-limits pattern used for
             safety-critical routing in hospitals and emergency systems.</p>
         </Reveal>
+      </section>
+
+      <section className="landing-section">
+        <Reveal><span className="section-eyebrow">Questions judges ask</span></Reveal>
+        <div className="faq-list">
+          {FAQ.map((item) => (
+            <details key={item.q} className="faq-item">
+              <summary className="font-display">{item.q}</summary>
+              <p>{item.a}</p>
+            </details>
+          ))}
+        </div>
       </section>
 
       <section className="landing-section cta-section">

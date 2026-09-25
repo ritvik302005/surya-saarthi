@@ -10,6 +10,7 @@ calls, so a 2-day run of all four scenarios takes a while.
 import json
 import os
 import sys
+from datetime import datetime
 
 from fastapi.testclient import TestClient
 
@@ -32,10 +33,12 @@ def essential_outage_hours(cycles):
 
 def write_frontend_summary():
     scenarios = {}
+    newest = 0.0
     for scenario in config.WEATHER_SCENARIOS:
         path = os.path.join(OUT_DIR, f"{scenario}.json")
         if not os.path.exists(path):
             continue
+        newest = max(newest, os.path.getmtime(path))   # when the simulation actually ran
         with open(path, encoding="utf-8") as f:
             result = json.load(f)
         c, s = result["summary"]["vs_rule_based"], result["summary"]
@@ -55,7 +58,8 @@ def write_frontend_summary():
         }
     os.makedirs(os.path.dirname(SUMMARY_PATH), exist_ok=True)
     with open(SUMMARY_PATH, "w", encoding="utf-8") as f:
-        json.dump({"source": "backend/run_scenarios.py", "scenarios": scenarios}, f, indent=1)
+        generated_at = datetime.fromtimestamp(newest).isoformat(timespec="minutes") if scenarios else None
+        json.dump({"source": "backend/run_scenarios.py", "generated_at": generated_at, "scenarios": scenarios}, f, indent=1)
     print(f"wrote {SUMMARY_PATH} ({len(scenarios)} scenarios)")
 
 

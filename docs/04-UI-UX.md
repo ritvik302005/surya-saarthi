@@ -56,7 +56,7 @@ Landing (/)                       Dashboard (same URL, view state)
                                              └─ History report (modal)
 ```
 
-Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is lazy-loaded. Browser back does not switch views (acceptable for MVP; Planned: hash route `#/dashboard` so links and back work).
+Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is lazy-loaded. Browser back does not switch views (acceptable for MVP; Planned: hash route `#/dashboard` so links and back work). Each view sets its own page title ("Surya Saarthi — AI for solar microgrids" / "Dashboard · Surya Saarthi"). Both views start with a keyboard-only "Skip to content" link. Link previews use `public/og-image.png` (1200×630) via Open Graph / Twitter tags in `index.html`.
 
 ## 4. Screens
 
@@ -71,6 +71,7 @@ Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is 
 | What it manages | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
 | Who it's for | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
 | Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph | Centered |
+| FAQ ("Questions judges ask") | Six native `<details>` items: real data?, AI mistakes?, internet?, better than today?, cost?, real equipment? | Keyboard-accessible, + / × indicator |
 | Live-demo CTA | Eyebrow, H2, *Start live session →* over animated waves | Dark radial panel behind text for contrast |
 | Footer | Loop summary; SDG 7 · Source on GitHub | Mono, small |
 
@@ -168,7 +169,7 @@ Error copy: network → "Can't reach the backend at {URL}. Make sure uvicorn mai
 | < 768 px | Situation panel and comparison stats 2 columns; cards stack; header controls wrap (3 rows at 390 px) |
 | 390 px (reference phone) | No horizontal scroll (verified); SVGs scale by `viewBox` |
 
-Planned improvement: on < 640 px collapse secondary header actions (Overview, History, Reset) into a "More" menu so the sticky header is one row.
+Below 640 px the header is two rows (brand; controls) and Overview / History report / Reset session move into a **More** menu (Done; closes on outside click or Escape).
 
 ## 11. Accessibility
 

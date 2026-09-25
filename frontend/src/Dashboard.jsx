@@ -10,6 +10,8 @@ import HistoryChart from './HistoryChart.jsx'
 import HistoryModal from './HistoryModal.jsx'
 import ComparisonCard from './ComparisonCard.jsx'
 import SituationPanel from './SituationPanel.jsx'
+import ConfirmDialog from './ConfirmDialog.jsx'
+import MoreMenu from './MoreMenu.jsx'
 import { useCountUp } from './useCountUp.js'
 import { apiFetch, checkedJson, errorMessage, sessionUrl } from './api.js'
 import { PRODUCT_NAME } from './brand.js'
@@ -54,6 +56,10 @@ export default function Dashboard({ onBack }) {
   const [simLoading, setSimLoading] = useState(false)
   const [simProgress, setSimProgress] = useState(null)   // { current, total } while running
   const [simStatusText, setSimStatusText] = useState('')  // latest reasoning, shown live
+  const [simDone, setSimDone] = useState(null)            // summary banner after a finished run
+  const [confirm, setConfirm] = useState(null)            // pending destructive action
+
+  useEffect(() => { document.title = `Dashboard · ${PRODUCT_NAME}` }, [])
 
   useEffect(() => {
     apiFetch('/scenarios')
@@ -73,8 +79,9 @@ export default function Dashboard({ onBack }) {
   // (each cycle is a real Groq call, that cost doesn't go away), but you can
   // actually see it working instead of staring at a frozen button.
   async function runSimulation() {
-    setSimLoading(true); setError(null); setReplanFlash(false)
+    setSimLoading(true); setError(null); setReplanFlash(false); setSimDone(null)
     const totalHours = days * 24
+    let last = null
     setSimProgress({ current: 0, total: totalHours })
     setSimStatusText('Starting simulation…')
 
@@ -91,6 +98,7 @@ export default function Dashboard({ onBack }) {
         setSimProgress({ current: i, total: totalHours })
 
         const data = await checkedJson(await apiFetch('/cycle', { method: 'POST' }))
+        last = data
 
         if (data.report?.replanned_this_cycle) {
           setReplanFlash(true)
@@ -119,6 +127,7 @@ export default function Dashboard({ onBack }) {
           + (data.reasoning ? ` — "${data.reasoning}"` : '')
         )
       }
+      setSimDone({ hours: totalHours, label: scenarios[scenario] || scenario, comparison: last?.comparison })
     } catch (err) {
       setError(errorMessage(err))
     } finally {
@@ -205,6 +214,27 @@ export default function Dashboard({ onBack }) {
     }
   }
 
+  // Ask first only when there is a run to lose; a fresh session goes straight ahead.
+  function requestSimulation() {
+    if (cyclesRun === 0) return runSimulation()
+    setConfirm({
+      title: 'Start a new simulation?',
+      body: `This clears the current run (${cyclesRun} hour${cyclesRun !== 1 ? 's' : ''}) and starts ${days} day${days !== 1 ? 's' : ''} of ${scenarios[scenario] || scenario}.`,
+      label: 'Start simulation',
+      onConfirm: runSimulation,
+    })
+  }
+
+  function requestReset() {
+    if (cyclesRun === 0) return resetSession()
+    setConfirm({
+      title: 'Reset this session?',
+      body: `This clears ${cyclesRun} simulated hour${cyclesRun !== 1 ? 's' : ''}, the chart and the totals. Download the CSV first if you need the numbers.`,
+      label: 'Reset session',
+      onConfirm: () => { setSimDone(null); resetSession() },
+    })
+  }
+
   const decision = state?.decision || {}
   const report = state?.report || {}
   const alerts = state?.alerts || []
@@ -214,18 +244,19 @@ export default function Dashboard({ onBack }) {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen flex flex-col animate-in fade-in duration-500">
-        <header className="sticky top-0 z-10 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-border bg-background/85 backdrop-blur-sm">
+        <a href="#main" className="skip-link">Skip to content</a>
+        <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-4 sm:px-14 py-3 sm:py-5 border-b border-border bg-background/85 backdrop-blur-sm">
           <div className="flex items-center gap-2.5 font-display font-semibold tracking-tight">
             <span className={`h-2 w-2 rounded-full ${loading ? 'bg-solar animate-pulse' : state ? 'bg-battery' : 'bg-muted-foreground'}`} />
             {PRODUCT_NAME}
           </div>
-          <div className="flex items-center gap-3 flex-wrap justify-end">
-            <div className="flex items-center gap-2 font-mono text-xs">
+          <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
+            <div className="flex items-center gap-2 font-mono text-xs w-full sm:w-auto">
               <select
                 value={scenario}
                 onChange={(e) => setScenario(e.target.value)}
                 disabled={simLoading}
-                className="bg-secondary border border-border rounded-md px-2 py-1.5 text-foreground disabled:opacity-50"
+                className="flex-1 sm:flex-none min-w-0 bg-secondary border border-border rounded-md px-2 py-1.5 text-foreground disabled:opacity-50"
                 title="Manually set the weather scenario for the next run"
               >
                 {Object.entries(scenarios).map(([key, label]) => (
@@ -242,20 +273,27 @@ export default function Dashboard({ onBack }) {
               <span className="text-muted-foreground">day{days !== 1 ? 's' : ''}</span>
             </div>
             <Tooltip>
-              <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={runSimulation} disabled={simLoading || loading} />}>
+              <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={requestSimulation} disabled={simLoading || loading} />}>
                 {simLoading ? 'Simulating…' : 'Run simulation'}
               </TooltipTrigger>
               <TooltipContent>Runs the chosen scenario for the chosen number of days in one go, instead of one cycle at a time.</TooltipContent>
             </Tooltip>
-            <Button variant="ghost" size="sm" onClick={onBack}>← Overview</Button>
-            <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>History report</Button>
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="outline" size="sm" onClick={resetSession} />}>
-                Reset session
-              </TooltipTrigger>
-              <TooltipContent>Clears this session's totals and chart. The server-side log keeps every cycle regardless.</TooltipContent>
-            </Tooltip>
-            <Button onClick={runCycle} disabled={loading || simLoading}>
+            <div className="hidden sm:flex items-center gap-3">
+              <Button variant="ghost" size="sm" onClick={onBack}>← Overview</Button>
+              <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>History report</Button>
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="outline" size="sm" onClick={requestReset} />}>
+                  Reset session
+                </TooltipTrigger>
+                <TooltipContent>Clears this session's totals and chart. The server-side log keeps every cycle regardless.</TooltipContent>
+              </Tooltip>
+            </div>
+            <MoreMenu items={[
+              { label: '← Overview', onClick: onBack },
+              { label: 'History report', onClick: () => setHistoryOpen(true) },
+              { label: 'Reset session', onClick: requestReset },
+            ]} />
+            <Button onClick={runCycle} disabled={loading || simLoading} className="ml-auto sm:ml-0">
               {loading ? 'Computing…' : 'Run cycle'}
             </Button>
           </div>
@@ -281,7 +319,23 @@ export default function Dashboard({ onBack }) {
           </div>
         )}
 
-        <main>
+        {simDone && (
+          <div role="status" className="px-6 sm:px-14 py-3 border-b border-border bg-battery/10">
+            <div className="max-w-3xl mx-auto flex items-start justify-between gap-4 text-sm">
+              <p>
+                <span className="font-semibold">Simulation complete:</span> {simDone.hours} hours of {simDone.label}.
+                {simDone.comparison && (
+                  <> {Math.abs(simDone.comparison.grid_reduction_pct).toFixed(1)}% {simDone.comparison.grid_reduction_pct >= 0 ? 'less' : 'more'} grid
+                    power and ₹{simDone.comparison.extra_savings_rs.toFixed(2)} {simDone.comparison.extra_savings_rs >= 0 ? 'saved' : 'extra'} vs
+                    fixed rules. Details below.</>
+                )}
+              </p>
+              <button className="text-muted-foreground hover:text-foreground shrink-0" aria-label="Dismiss" onClick={() => setSimDone(null)}>✕</button>
+            </div>
+          </div>
+        )}
+
+        <main id="main" tabIndex={-1} className="outline-none">
           <section className="max-w-3xl mx-auto text-center px-6 sm:px-14 pt-16 sm:pt-24 pb-10">
             <Badge variant="outline" className="mb-5 font-mono text-[0.7rem] tracking-wider text-battery border-battery/30 uppercase">
               Live agent · SDG 7 · Clean energy
@@ -290,8 +344,8 @@ export default function Dashboard({ onBack }) {
               Every cycle, it decides where the power comes from.
             </h1>
             <p className="text-muted-foreground text-[clamp(0.95rem,1.4vw,1.1rem)] leading-relaxed max-w-xl mx-auto mb-2">
-              A LangGraph agent reads solar and demand, reasons about the safest split across
-              solar, battery, and grid, and replans the moment its own forecast turns out wrong.
+              An AI agent reads sunlight, prices and demand, decides how to split power between
+              solar, battery and grid, and replans the moment its own forecast turns out wrong.
             </p>
 
             <PipelineStepper stepIndex={stepIndex} replanFlash={replanFlash} />
@@ -410,6 +464,7 @@ export default function Dashboard({ onBack }) {
         </footer>
 
         <HistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />
+        <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
       </div>
     </TooltipProvider>
   )
