@@ -1,16 +1,19 @@
-import os
-from datetime import datetime
-from typing import Optional
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
-from dotenv import load_dotenv
-
-load_dotenv()
-
 import csv
 import io
+import os
+import re
+import threading
+from collections import OrderedDict
+from datetime import datetime
+from typing import Optional
+
+from dotenv import load_dotenv
+from fastapi import FastAPI, Header, Query
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse, StreamingResponse
+from pydantic import BaseModel
+
+load_dotenv()
 
 import config
 from baseline import rule_based_step
@@ -29,12 +32,47 @@ LOG_DIR = "logs"
 LOG_PATH = os.path.join(LOG_DIR, "microgrid_log.txt")
 os.makedirs(LOG_DIR, exist_ok=True)
 
-current_state = {}
-cycle_history = []   # in-memory record for this server run, cleared on /reset
-cycle_counter = 0
-sim_hour_counter = 0            # NEW: simulated hour, replaces datetime.now() everywhere in the pipeline
-current_scenario = config.DEFAULT_SCENARIO  # NEW: manually-selectable weather scenario
-baseline_soc = None             # rule-based controller's own battery, run side by side for comparison
+MAX_SESSIONS = 100   # oldest idle sessions are dropped beyond this
+
+
+class Session:
+    """Everything one viewer's run needs. Each browser tab gets its own, so two
+    people using the live demo at once never see each other's cycles."""
+
+    def __init__(self, scenario=config.DEFAULT_SCENARIO):
+        self.lock = threading.Lock()
+        self.scenario = scenario
+        self.reset()
+
+    def reset(self, scenario=None):
+        # keeps self.lock: reset runs while the lock is held
+        self.scenario = scenario or self.scenario
+        self.state = {}
+        self.history = []
+        self.cycle_counter = 0
+        self.sim_hour = 0
+        self.baseline_soc = config.INITIAL_BATTERY_SOC_PCT   # rule-based controller's own battery
+
+
+_sessions = OrderedDict()
+_sessions_lock = threading.Lock()
+
+
+def get_session(session_id):
+    """Session id comes from the X-Session-Id header (or ?session= for plain
+    download links). Requests without one share the "default" session, which
+    keeps curl and the test scripts working."""
+    key = re.sub(r"[^A-Za-z0-9_-]", "", session_id or "")[:64] or "default"
+    with _sessions_lock:
+        session = _sessions.pop(key, None) or Session()
+        _sessions[key] = session
+        while len(_sessions) > MAX_SESSIONS:
+            _sessions.popitem(last=False)
+    return session
+
+
+def session_from(x_session_id, session_query=None):
+    return get_session(x_session_id or session_query)
 
 
 class ResetOptions(BaseModel):
@@ -46,65 +84,66 @@ class SimulateOptions(BaseModel):
     days: int = 1
 
 
+def format_log_entry(entry):
+    lines = [
+        f"[{entry['timestamp']}] Cycle {entry['cycle']} (sim hour {entry['sim_hour']}, {entry['scenario']})",
+        f"  Solar: {entry['solar_kw']} kW | Battery: {entry['battery_kw']} kW | "
+        f"Grid: {entry['grid_kw']} kW | Load: {entry['load_kw']} kW",
+        f"  Export: {entry['export_kw']} kW | Battery SOC after: {entry['battery_soc_pct']}%",
+        f"  Reasoning: {entry['reasoning']}",
+    ]
+    lines += [f"  Alert: {a}" for a in entry["alerts"]] or ["  Alerts: none"]
+    lines += [
+        f"  Replanned: {'Yes' if entry['replanned'] else 'No'}",
+        f"  Savings: Rs {entry['savings_rs']} | Carbon avoided: {entry['carbon_avoided_kg']} kg",
+        "-" * 70,
+    ]
+    return "\n".join(lines) + "\n"
+
+
 def log_cycle_to_file(entry):
     with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(f"[{entry['timestamp']}] Cycle {entry['cycle']} (sim hour {entry['sim_hour']}, {entry['scenario']})\n")
-        f.write(f"  Solar: {entry['solar_kw']} kW | Battery: {entry['battery_kw']} kW | "
-                f"Grid: {entry['grid_kw']} kW | Load: {entry['load_kw']} kW\n")
-        f.write(f"  Export: {entry['export_kw']} kW | Battery SOC after: {entry['battery_soc_pct']}%\n")
-        f.write(f"  Reasoning: {entry['reasoning']}\n")
-        if entry["alerts"]:
-            for a in entry["alerts"]:
-                f.write(f"  Alert: {a}\n")
-        else:
-            f.write("  Alerts: none\n")
-        f.write(f"  Replanned: {'Yes' if entry['replanned'] else 'No'}\n")
-        f.write(f"  Savings: Rs {entry['savings_rs']} | Carbon avoided: {entry['carbon_avoided_kg']} kg\n")
-        f.write("-" * 70 + "\n")
+        f.write(format_log_entry(entry))
 
 
-def _run_one_cycle():
+def _run_one_cycle(session):
     """Shared by /cycle and /simulate so both paths build history entries,
     log to file, and inject sim_hour/scenario in exactly the same way —
     they can never drift out of sync with each other."""
-    global current_state, cycle_counter, sim_hour_counter, baseline_soc
+    session.state["sim_hour"] = session.sim_hour
+    session.state["scenario"] = session.scenario
 
-    current_state["sim_hour"] = sim_hour_counter
-    current_state["scenario"] = current_scenario
+    state = graph.invoke(session.state)
+    session.cycle_counter += 1
+    session.sim_hour += 1
 
-    current_state = graph.invoke(current_state)
-    cycle_counter += 1
-    sim_hour_counter += 1
+    decision = state.get("decision", {})
+    report = state.get("report", {})
 
-    decision = current_state.get("decision", {})
-    report = current_state.get("report", {})
-
-    if baseline_soc is None:
-        baseline_soc = config.INITIAL_BATTERY_SOC_PCT
     rule = rule_based_step(
-        baseline_soc, current_state["battery_capacity_kwh"], current_state["solar_kw"],
-        current_state["critical_load_kw"], current_state.get("new_flexible_loads", []),
-        current_state["grid_price_per_kwh"],
+        session.baseline_soc, state["battery_capacity_kwh"], state["solar_kw"],
+        state["critical_load_kw"], state.get("new_flexible_loads", []),
+        state["grid_price_per_kwh"],
     )
-    baseline_soc = rule["soc_pct"]
+    session.baseline_soc = rule["soc_pct"]
 
     entry = {
-        "cycle": cycle_counter,
-        "sim_hour": current_state.get("sim_hour", 0),
-        "scenario": current_state.get("scenario", current_scenario),
+        "cycle": session.cycle_counter,
+        "sim_hour": state.get("sim_hour", 0),
+        "scenario": state.get("scenario", session.scenario),
         "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "solar_kw": decision.get("solar_used_kw", 0),
         "battery_kw": decision.get("battery_used_kw", 0),
         "grid_kw": decision.get("grid_used_kw", 0),
         "load_kw": report.get("served_load_kw", 0),
         "deferred_loads": report.get("deferred_loads", []),
-        "battery_soc_pct": current_state.get("battery_soc_pct", 0),
-        "reasoning": current_state.get("reasoning", ""),
-        "alerts": current_state.get("alerts", []),
+        "battery_soc_pct": state.get("battery_soc_pct", 0),
+        "reasoning": state.get("reasoning", ""),
+        "alerts": state.get("alerts", []),
         "replanned": report.get("replanned_this_cycle", False),
         "savings_rs": report.get("savings_rs", 0),
         "carbon_avoided_kg": report.get("carbon_avoided_kg", 0),
-        "grid_price_rs": current_state.get("grid_price_per_kwh", 0),
+        "grid_price_rs": state.get("grid_price_per_kwh", 0),
         "agent_cost_rs": report.get("net_cost_rs", 0),        # import cost minus export credit
         "export_kw": report.get("export_kw", 0),
         "solar_available_kw": report.get("solar_available_kw", 0),
@@ -114,16 +153,17 @@ def _run_one_cycle():
         "rule_cost_rs": rule["net_cost_rs"],
         "rule_export_kw": rule["export_kw"],
         "rule_solar_self_used_kw": rule["solar_self_used_kw"],
-        "ai_fallback": any("allocator output was unavailable" in a for a in current_state.get("alerts", [])),
+        "ai_fallback": any("allocator output was unavailable" in a for a in state.get("alerts", [])),
     }
 
-    cycle_history.append(entry)
+    session.history.append(entry)
     log_cycle_to_file(entry)
-    current_state["comparison"] = comparison_summary()
+    state["comparison"] = comparison_summary(session.history)
+    session.state = state
     return entry
 
 
-def comparison_summary():
+def comparison_summary(cycle_history):
     """Agent vs rule-based controller over every cycle run since the last reset."""
     agent_grid = sum(c["grid_kw"] for c in cycle_history) * config.CYCLE_HOURS
     rule_grid = sum(c["rule_grid_kw"] for c in cycle_history) * config.CYCLE_HOURS
@@ -138,7 +178,7 @@ def comparison_summary():
         "hours": len(cycle_history),
         "agent_grid_kwh": round(agent_grid, 2),
         "rule_grid_kwh": round(rule_grid, 2),
-        "grid_reduction_pct": round((rule_grid - agent_grid) / rule_grid * 100, 1) if rule_grid else 0.0,
+        "grid_reduction_pct": pct(rule_grid - agent_grid, rule_grid),
         "agent_cost_rs": round(agent_cost, 2),
         "rule_cost_rs": round(rule_cost, 2),
         "extra_savings_rs": round(rule_cost - agent_cost, 2),
@@ -155,6 +195,10 @@ def comparison_summary():
     }
 
 
+def _invalid_scenario(scenario):
+    return {"error": f"Unknown scenario '{scenario}'. Valid options: {list(config.WEATHER_SCENARIOS.keys())}"}
+
+
 @app.get("/health")
 def health():
     return {"status": "ok"}
@@ -168,82 +212,74 @@ def get_scenarios():
 
 
 @app.get("/state")
-def get_state():
-    return current_state
+def get_state(x_session_id: Optional[str] = Header(None)):
+    return session_from(x_session_id).state
 
 
 @app.post("/cycle")
-def run_cycle():
-    """Advances exactly one simulated hour using whatever scenario is
-    currently set (via /reset, or "normal" if never set) — unchanged
-    behavior from the caller's point of view, just no longer tied to the
-    real wall-clock hour under the hood."""
-    _run_one_cycle()
-    return current_state
+def run_cycle(x_session_id: Optional[str] = Header(None)):
+    """Advances exactly one simulated hour using the session's current scenario."""
+    session = session_from(x_session_id)
+    with session.lock:
+        _run_one_cycle(session)
+        return session.state
 
 
 @app.post("/simulate")
-def simulate(options: SimulateOptions):
-    """NEW: run a whole batch (days * 24 simulated hours) in one call, with a
-    manually chosen weather scenario — the feature this endpoint exists for.
-    Starts from a clean state every time (same as calling /reset first), so
-    a run is always self-contained and repeatable for a given scenario/days."""
-    global current_state, cycle_history, cycle_counter, sim_hour_counter, current_scenario, baseline_soc
-
+def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None)):
+    """Run a whole batch (days * 24 simulated hours) in one call with a chosen
+    weather scenario. Always starts from a clean session, so a run is
+    self-contained and repeatable for a given scenario/days."""
     if options.scenario not in config.WEATHER_SCENARIOS:
-        return {"error": f"Unknown scenario '{options.scenario}'. Valid options: {list(config.WEATHER_SCENARIOS.keys())}"}
+        return _invalid_scenario(options.scenario)
     if options.days < 1 or options.days > 7:
         return {"error": "days must be between 1 and 7"}
 
-    current_state = {}
-    cycle_history = []
-    cycle_counter = 0
-    sim_hour_counter = 0
-    baseline_soc = None
-    current_scenario = options.scenario
+    session = session_from(x_session_id)
+    with session.lock:
+        session.reset(options.scenario)
+        total_hours = options.days * 24
+        for _ in range(total_hours):
+            _run_one_cycle(session)
 
-    total_hours = options.days * 24
-    for _ in range(total_hours):
-        _run_one_cycle()
-
-    total_savings = round(sum(c["savings_rs"] for c in cycle_history), 2)
-    total_carbon_avoided = round(sum(c["carbon_avoided_kg"] for c in cycle_history), 2)
-    total_replans = sum(1 for c in cycle_history if c["replanned"])
-    total_deferred_events = sum(len(c["deferred_loads"]) for c in cycle_history)
-
-    return {
-        "scenario": options.scenario,
-        "days": options.days,
-        "hours_run": total_hours,
-        "summary": {
-            "total_savings_rs": total_savings,
-            "total_carbon_avoided_kg": total_carbon_avoided,
-            "cycles_with_replan": total_replans,
-            "deferred_load_events": total_deferred_events,
-            "final_battery_soc_pct": current_state.get("battery_soc_pct", 0),
-            "vs_rule_based": comparison_summary(),
-        },
-        "cycles": cycle_history,
-        "final_state": current_state,
-    }
+        history = session.history
+        return {
+            "scenario": options.scenario,
+            "days": options.days,
+            "hours_run": total_hours,
+            "summary": {
+                "total_savings_rs": round(sum(c["savings_rs"] for c in history), 2),
+                "total_carbon_avoided_kg": round(sum(c["carbon_avoided_kg"] for c in history), 2),
+                "cycles_with_replan": sum(1 for c in history if c["replanned"]),
+                "deferred_load_events": sum(len(c["deferred_loads"]) for c in history),
+                "final_battery_soc_pct": session.state.get("battery_soc_pct", 0),
+                "vs_rule_based": comparison_summary(history),
+            },
+            "cycles": history,
+            "final_state": session.state,
+        }
 
 
 @app.get("/history")
-def get_history():
-    return {"cycles": cycle_history}
+def get_history(x_session_id: Optional[str] = Header(None)):
+    return {"cycles": session_from(x_session_id).history}
 
 
 @app.get("/history/download")
-def download_log():
-    if not os.path.exists(LOG_PATH):
-        return {"error": "No log file yet — run at least one cycle first."}
-    return FileResponse(LOG_PATH, media_type="text/plain", filename="microgrid_log.txt")
+def download_log(x_session_id: Optional[str] = Header(None), session: Optional[str] = Query(None)):
+    """This session's cycles as a readable text log."""
+    history = session_from(x_session_id, session).history
+    if not history:
+        return {"error": "No cycles yet — run at least one cycle first."}
+    return PlainTextResponse("".join(format_log_entry(e) for e in history),
+                             headers={"Content-Disposition": "attachment; filename=microgrid_log.txt"})
 
 
 @app.get("/history/csv")
-def download_csv():
+def download_csv(x_session_id: Optional[str] = Header(None), session: Optional[str] = Query(None)):
     """Per-hour results (agent and rule-based side by side) for charts and reports."""
-    if not cycle_history:
+    history = session_from(x_session_id, session).history
+    if not history:
         return {"error": "No cycles yet — run a simulation first."}
     fields = ["cycle", "sim_hour", "scenario", "solar_available_kw", "solar_kw", "battery_kw", "grid_kw",
               "export_kw", "load_kw", "battery_soc_pct", "grid_price_rs", "agent_cost_rs",
@@ -252,26 +288,19 @@ def download_csv():
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
-    writer.writerows(cycle_history)
-    buffer.seek(0)
+    writer.writerows(history)
     return StreamingResponse(iter([buffer.getvalue()]), media_type="text/csv",
                              headers={"Content-Disposition": "attachment; filename=microgrid_results.csv"})
 
 
 @app.post("/reset")
-def reset_state(options: Optional[ResetOptions] = None):
-    """Existing behavior preserved (call with no body = full reset, scenario
-    stays whatever it was). NEW: optionally pass {"scenario": "cloudy"} to
-    also switch the weather scenario for the manual one-cycle-at-a-time flow,
-    not just the new /simulate batch endpoint."""
-    global current_state, cycle_history, cycle_counter, sim_hour_counter, current_scenario, baseline_soc
-    current_state = {}
-    cycle_history = []
-    cycle_counter = 0
-    sim_hour_counter = 0
-    baseline_soc = None
-    if options and options.scenario:
-        if options.scenario not in config.WEATHER_SCENARIOS:
-            return {"error": f"Unknown scenario '{options.scenario}'. Valid options: {list(config.WEATHER_SCENARIOS.keys())}"}
-        current_scenario = options.scenario
-    return {"status": "reset", "scenario": current_scenario}
+def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[str] = Header(None)):
+    """Clears this session. Optionally pass {"scenario": "cloudy"} to switch the
+    weather scenario for the next cycles."""
+    scenario = options.scenario if options else None
+    if scenario and scenario not in config.WEATHER_SCENARIOS:
+        return _invalid_scenario(scenario)
+    session = session_from(x_session_id)
+    with session.lock:
+        session.reset(scenario)
+        return {"status": "reset", "scenario": session.scenario}

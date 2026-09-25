@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
+import { apiFetch, checkedJson, sessionUrl } from './api.js'
 
 export default function HistoryModal({ open, onOpenChange }) {
   const [cycles, setCycles] = useState([])
@@ -13,8 +13,8 @@ export default function HistoryModal({ open, onOpenChange }) {
   useEffect(() => {
     if (!open) return
     setLoading(true)
-    fetch(`${API_URL}/history`)
-      .then((res) => res.json())
+    apiFetch('/history')
+      .then(checkedJson)
       .then((data) => { setCycles(data.cycles || []); setError(null) })
       .catch(() => setError("Can't reach the backend to load history."))
       .finally(() => setLoading(false))
@@ -26,7 +26,7 @@ export default function HistoryModal({ open, onOpenChange }) {
         <DialogHeader className="flex-row items-center justify-between space-y-0">
           <DialogTitle className="font-display">Cycle history</DialogTitle>
           <Button variant="outline" size="sm" className="mr-6" nativeButton={false}
-                  render={<a href={`${API_URL}/history/download`} target="_blank" rel="noreferrer" />}>
+                  render={<a href={sessionUrl('/history/download')} target="_blank" rel="noreferrer" />}>
             Download log (.txt)
           </Button>
         </DialogHeader>

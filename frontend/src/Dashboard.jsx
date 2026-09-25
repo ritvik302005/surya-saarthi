@@ -11,8 +11,8 @@ import HistoryModal from './HistoryModal.jsx'
 import ComparisonCard from './ComparisonCard.jsx'
 import SituationPanel from './SituationPanel.jsx'
 import { useCountUp } from './useCountUp.js'
+import { apiFetch, checkedJson, errorMessage, sessionUrl } from './api.js'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
 const wait = (ms) => new Promise((r) => setTimeout(r, ms))
 
 function BatteryGauge({ pct }) {
@@ -55,8 +55,8 @@ export default function Dashboard({ onBack }) {
   const [simStatusText, setSimStatusText] = useState('')  // latest reasoning, shown live
 
   useEffect(() => {
-    fetch(`${API_URL}/scenarios`)
-      .then((r) => r.json())
+    apiFetch('/scenarios')
+      .then(checkedJson)
       .then((d) => {
         if (d.scenarios) setScenarios(d.scenarios)
         if (d.default) setScenario(d.default)
@@ -78,21 +78,18 @@ export default function Dashboard({ onBack }) {
     setSimStatusText('Starting simulation…')
 
     try {
-      const resetRes = await fetch(`${API_URL}/reset`, {
+      await checkedJson(await apiFetch('/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenario }),
-      })
-      if (!resetRes.ok) throw new Error('Reset failed')
+      }))
 
       setCyclesRun(0); setTotalSavings(0); setTotalCarbon(0); setHistory([]); setStepIndex(-1)
 
       for (let i = 1; i <= totalHours; i++) {
         setSimProgress({ current: i, total: totalHours })
 
-        const res = await fetch(`${API_URL}/cycle`, { method: 'POST' })
-        if (!res.ok) throw new Error('Cycle failed')
-        const data = await res.json()
+        const data = await checkedJson(await apiFetch('/cycle', { method: 'POST' }))
 
         if (data.report?.replanned_this_cycle) {
           setReplanFlash(true)
@@ -121,21 +118,33 @@ export default function Dashboard({ onBack }) {
           + (data.reasoning ? ` — "${data.reasoning}"` : '')
         )
       }
-    } catch {
-      setError(`Can't reach the backend at ${API_URL}. Make sure uvicorn main:app --reload is running.`)
+    } catch (err) {
+      setError(errorMessage(err))
     } finally {
       setSimLoading(false); setSimProgress(null)
     }
   }
 
+  // On load (or refresh), pick up this tab's session from the backend so the
+  // chart and session totals don't reset to zero while the server still has them.
   const fetchState = useCallback(async () => {
     try {
-      const res = await fetch(`${API_URL}/state`)
-      const data = await res.json()
+      const [data, past] = await Promise.all([
+        apiFetch('/state').then(checkedJson),
+        apiFetch('/history').then(checkedJson),
+      ])
       if (data && data.decision) { setState(data); setStepIndex(4) }
+      const cycles = past.cycles || []
+      setCyclesRun(cycles.length)
+      setTotalSavings(cycles.reduce((s, c) => s + (c.savings_rs || 0), 0))
+      setTotalCarbon(cycles.reduce((s, c) => s + (c.carbon_avoided_kg || 0), 0))
+      setHistory(cycles.slice(-20).map((c) => ({
+        cycle: c.cycle, solar: c.solar_kw || 0, battery: c.battery_kw || 0, grid: c.grid_kw || 0, replanned: !!c.replanned,
+      })))
+      if (data?.scenario) setScenario(data.scenario)
       setError(null)
-    } catch {
-      setError(`Can't reach the backend at ${API_URL}. Make sure uvicorn main:app --reload is running.`)
+    } catch (err) {
+      setError(errorMessage(err))
     }
   }, [])
 
@@ -150,9 +159,7 @@ export default function Dashboard({ onBack }) {
     })()
 
     try {
-      const res = await fetch(`${API_URL}/cycle`, { method: 'POST' })
-      if (!res.ok) throw new Error('Request failed')
-      const data = await res.json()
+      const data = await checkedJson(await apiFetch('/cycle', { method: 'POST' }))
       cancelled = true
 
       if (data.report?.replanned_this_cycle) {
@@ -175,9 +182,9 @@ export default function Dashboard({ onBack }) {
           replanned: !!data.report?.replanned_this_cycle,
         },
       ])
-    } catch {
+    } catch (err) {
       cancelled = true
-      setError(`Can't reach the backend at ${API_URL}. Make sure uvicorn main:app --reload is running.`)
+      setError(errorMessage(err))
     } finally {
       setLoading(false); setReplanFlash(false)
     }
@@ -185,15 +192,15 @@ export default function Dashboard({ onBack }) {
 
   async function resetSession() {
     try {
-      await fetch(`${API_URL}/reset`, {
+      await checkedJson(await apiFetch('/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ scenario }),
-      })
+      }))
       setState(null); setCyclesRun(0); setTotalSavings(0); setTotalCarbon(0)
       setHistory([]); setStepIndex(-1)
-    } catch {
-      setError(`Can't reach the backend at ${API_URL}.`)
+    } catch (err) {
+      setError(errorMessage(err))
     }
   }
 
@@ -383,7 +390,7 @@ export default function Dashboard({ onBack }) {
 
           {state?.comparison && (
             <div className="mt-8">
-              <ComparisonCard comparison={state.comparison} csvUrl={`${API_URL}/history/csv`} />
+              <ComparisonCard comparison={state.comparison} csvUrl={sessionUrl('/history/csv')} />
             </div>
           )}
 
