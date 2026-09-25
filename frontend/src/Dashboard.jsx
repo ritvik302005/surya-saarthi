@@ -8,6 +8,7 @@ import EnergyFlow from './EnergyFlow.jsx'
 import PipelineStepper from './PipelineStepper.jsx'
 import HistoryChart from './HistoryChart.jsx'
 import HistoryModal from './HistoryModal.jsx'
+import ComparisonCard from './ComparisonCard.jsx'
 import { useCountUp } from './useCountUp.js'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://127.0.0.1:8000'
@@ -377,6 +378,12 @@ export default function Dashboard({ onBack }) {
                 </CardContent>
               </Card>
             </section>
+          )}
+
+          {state?.comparison && (
+            <div className="mt-8">
+              <ComparisonCard comparison={state.comparison} csvUrl={`${API_URL}/history/csv`} />
+            </div>
           )}
 
           {history.length > 0 && (
