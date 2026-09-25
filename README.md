@@ -53,6 +53,14 @@ Each browser tab gets its own session (the frontend sends an `X-Session-Id` head
 | Demand data | Simulated (no smart meter yet) | — |
 | Forecast error | Actual solar = forecast × noise (sunny 5%, normal 20%, cloudy 35%, monsoon 45%) | `config.WEATHER_SCENARIOS` |
 
+## Project documents
+
+- [PRD](docs/01-PRD.md) — problem, users, goals, MVP scope, success metrics
+- [SRS](docs/02-SRS.md) — testable functional and non-functional requirements
+- [Architecture](docs/03-Architecture.md) — components, data flow, API, deployment
+- [UI/UX](docs/04-UI-UX.md) — screens, flows, states, design tokens
+- [Development plan](docs/05-Development-Plan.md) — remaining milestones and Definition of Done
+
 ## Stack
 
 - **Backend:** FastAPI + LangGraph + LangChain (Groq for LLM calls)
