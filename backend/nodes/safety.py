@@ -1,5 +1,7 @@
 from config import CYCLE_HOURS, BATTERY_RESERVE_PCT, BATTERY_MAX_CHARGE_KW, BATTERY_MAX_DISCHARGE_KW
 
+TOLERANCE_KW = 0.01  # ignore rounding-level differences so overrides only fire on real violations
+
 def enforce_safety_node(state):
     decision = dict(state["decision"])  # copy so we don't mutate the LLM's original response
     alerts = list(state.get("alerts", []))
@@ -18,7 +20,7 @@ def enforce_safety_node(state):
         alerts.append(f"Safety override: {', '.join(forced)} reached its deadline and cannot be deferred again.")
 
     # --- Check 1: can't use more solar than is actually being generated ---
-    if solar_used > solar_available:
+    if solar_used > solar_available + TOLERANCE_KW:
         shortfall = round(solar_used - solar_available, 2)
         solar_used = solar_available
         grid_used += shortfall
@@ -29,7 +31,7 @@ def enforce_safety_node(state):
         available_kwh = max(0, (state["battery_soc_pct"] - BATTERY_RESERVE_PCT) / 100 * state["battery_capacity_kwh"])
         max_battery_kw = min(available_kwh / CYCLE_HOURS, BATTERY_MAX_DISCHARGE_KW)
 
-        if battery_used > max_battery_kw:
+        if battery_used > max_battery_kw + TOLERANCE_KW:
             shortfall = round(battery_used - max_battery_kw, 2)
             battery_used = round(max_battery_kw, 2)
             grid_used += shortfall
@@ -41,7 +43,7 @@ def enforce_safety_node(state):
         surplus_solar = max(0, solar_available - solar_used)
         max_charge_kw = min(room_kwh / CYCLE_HOURS, BATTERY_MAX_CHARGE_KW, surplus_solar)
 
-        if charge_kw > max_charge_kw:
+        if charge_kw > max_charge_kw + TOLERANCE_KW:
             capped = round(charge_kw - max_charge_kw, 2)
             battery_used = round(-max_charge_kw, 2)
             alerts.append(f"Safety override: capped battery charging at {max_charge_kw:.2f} kW (surplus solar, 100% SOC or {BATTERY_MAX_CHARGE_KW} kW rate limit), {capped} kW not charged.")
@@ -52,7 +54,7 @@ def enforce_safety_node(state):
         load["power_kw"] for load in state.get("flexible_loads", []) if load["name"] not in defer_loads
     )
     supplied = solar_used + max(0, battery_used) + grid_used
-    if supplied < demand_kw:
+    if supplied < demand_kw - TOLERANCE_KW:
         shortfall = round(demand_kw - supplied, 2)
         grid_used = round(grid_used + shortfall, 2)
         alerts.append(f"Safety override: {shortfall} kW of demand was left unpowered by the allocator, forced from grid.")
