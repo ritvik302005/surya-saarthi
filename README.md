@@ -22,6 +22,16 @@ sense → allocate → safety → apply → report
 
 If actual conditions drift too far from what was planned, the loop jumps back to `allocate` and replans before finishing the cycle.
 
+Safety rules enforced after the LLM, every cycle: battery stays above the 20% reserve, charge/discharge stay under 5 kW, no more solar is used than is generated, every non-deferred load is powered, deferred jobs must run before their deadline, and surplus solar charges the battery.
+
+### Time-of-Day tariff
+
+Grid price follows India's 2023 Time-of-Day rules: solar hours (09–17) are 20% cheaper and the evening peak (18–22) is 20% costlier than the ₹8/kWh base. The agent sees the next 8 hours of prices, so it saves battery for the peak and moves flexible loads out of it.
+
+### Agent vs rule-based comparison
+
+Every cycle, a fixed-rule controller (`backend/baseline.py`: solar, then battery, then grid, never defers) runs on the same solar and demand. The dashboard and `/simulate` summary show grid kWh for both, % less grid power, extra rupees saved and the renewable share. `GET /history/csv` downloads per-hour results.
+
 ## Stack
 
 - **Backend:** FastAPI + LangGraph + LangChain (Groq for LLM calls)
