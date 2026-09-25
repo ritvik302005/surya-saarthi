@@ -1,6 +1,8 @@
 import json
 import math
 import os
+import re
+import time
 from numbers import Real
 
 import config
@@ -24,6 +26,9 @@ Rules:
   soonest deadline_hour LAST. Loads with must_run=true are at their deadline and must
   never be deferred.
 - Prefer solar over battery, and battery over grid, in that order, for serving load.
+- Grid price changes by time of day. Save battery charge for expensive peak hours, and
+  when a flexible load must use grid power, run it in a cheaper hour before its deadline
+  instead of piling every deferred load into the last hour.
 
 Return one JSON object with exactly these fields:
 {{"solar_used_kw": <number>, "battery_used_kw": <number, negative means charging>, "grid_used_kw": <number>, "defer_loads": [<load names>], "reasoning": "<one sentence>"}}
@@ -60,9 +65,38 @@ def _get_llm():
             groq_api_key=api_key,
             model=config.LLM_MODEL,
             temperature=0,
-            max_tokens=1024,
+            max_tokens=2048,
+            reasoning_effort="low",   # short hidden reasoning: fewer truncated JSON replies and fewer tokens per minute
+            max_retries=0,            # retries are handled in _invoke_with_retry so waits can follow Groq's hints
         )
     return llm
+
+
+def _retry_delay(error, attempt):
+    """Groq's 429 message says how long to wait ("try again in 367.5ms" / "in 2.1s").
+    Use that when present, otherwise back off exponentially."""
+    match = re.search(r"try again in ([\d.]+)(ms|s)", str(error))
+    if match:
+        seconds = float(match.group(1)) / (1000 if match.group(2) == "ms" else 1)
+        return min(seconds + 0.25, 20)
+    return min(2 ** attempt, 20)
+
+
+def _invoke_with_retry(messages):
+    last_error = None
+    for attempt in range(config.LLM_MAX_ATTEMPTS):
+        try:
+            response = _get_llm().invoke(messages, response_format=DECISION_RESPONSE_FORMAT)
+            return response
+        except Exception as error:
+            last_error = error
+            text = str(error)
+            retryable = ("rate_limit" in text or "429" in text or "json_validate_failed" in text
+                         or "503" in text or "timed out" in text.lower())
+            if not retryable or attempt == config.LLM_MAX_ATTEMPTS - 1:
+                raise
+            time.sleep(_retry_delay(error, attempt))
+    raise last_error
 
 
 def _fallback_decision(state):
@@ -126,6 +160,10 @@ def plan_allocation_node(state):
          "must_run": load.get("must_run", False)}
         for load in state["flexible_loads"]
     ]
+    hour_now = state.get('sim_hour', 0) % 24
+    upcoming_prices = ", ".join(
+        f"{(hour_now + k) % 24:02d}h Rs {config.grid_price_for_hour((hour_now + k) % 24)}" for k in range(1, 9)
+    )
     human_prompt = f"""
 Weather scenario: {state.get('scenario', 'normal')}
 Simulated hour: {state.get('sim_hour', 0)} (hour-of-day {state.get('sim_hour', 0) % 24})
@@ -134,15 +172,15 @@ Forecast next hour: {state['forecast_solar_kw']} kW
 Battery: {state['battery_soc_pct']}% of {state['battery_capacity_kwh']} kWh capacity
 Critical load: {state['critical_load_kw']} kW
 Flexible loads: {flexible_summary}
-Grid price: Rs {state['grid_price_per_kwh']}/kWh
+Grid price now: Rs {state['grid_price_per_kwh']}/kWh
+Grid price next 8 hours: {upcoming_prices}
 """
     if state.get("replanned"):
         human_prompt += "\nThe last forecast was inaccurate. Preserve more battery reserve for uncertainty.\n"
     fallback = False
     try:
-        response = _get_llm().invoke(
-            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human_prompt)],
-            response_format=DECISION_RESPONSE_FORMAT,
+        response = _invoke_with_retry(
+            [SystemMessage(content=SYSTEM_PROMPT), HumanMessage(content=human_prompt)]
         )
         parsed = _validated_decision(_extract_json(response.content), state)
     except Exception as e:
