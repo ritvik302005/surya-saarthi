@@ -49,6 +49,10 @@ def fetch_hourly_irradiance():
     return _irradiance_cache
 
 
+def cloud_noise(variability):
+    return min(1.25, max(0.1, random.gauss(1.0, variability)))
+
+
 def irradiance_to_kw(irradiance_w_m2, system_capacity_kw=None):
     if system_capacity_kw is None:
         system_capacity_kw = config.SYSTEM_CAPACITY_KW
@@ -93,7 +97,10 @@ def read_and_forecast_node(state):
     scenario = config.WEATHER_SCENARIOS.get(scenario_key, config.WEATHER_SCENARIOS[config.DEFAULT_SCENARIO])
 
     series = fetch_hourly_irradiance()
-    current_irr = series[sim_hour % len(series)] * scenario["multiplier"]
+    # Forecast = the weather feed scaled for the scenario. Actual = forecast with
+    # passing-cloud noise, so the forecast can be wrong and the agent replans.
+    forecast_now = series[sim_hour % len(series)] * scenario["multiplier"]
+    current_irr = forecast_now * cloud_noise(scenario["variability"])
     next_irr = series[(sim_hour + 1) % len(series)] * scenario["multiplier"]
 
     critical_load_kw, new_loads = simulate_demand(sim_hour)

@@ -34,10 +34,12 @@ def grid_price_for_hour(hour_of_day):
 # --- Manual weather scenarios for the new /simulate + scenario-aware /reset ---
 # Multiplier is applied to real Open-Meteo irradiance, so "cloudy" still tracks the
 # actual shape of a day (dawn/noon/dusk) just scaled down, not an arbitrary curve.
+# "variability" is how far actual sunlight wanders from the forecast hour to hour
+# (std-dev as a fraction), so passing clouds make the forecast wrong and trigger replans.
 WEATHER_SCENARIOS = {
-    "sunny":   {"multiplier": 1.15, "label": "Clear sunny day"},
-    "normal":  {"multiplier": 1.00, "label": "Normal / mixed clouds"},
-    "cloudy":  {"multiplier": 0.55, "label": "Overcast, patchy clouds"},
-    "monsoon": {"multiplier": 0.30, "label": "Heavy monsoon cloud cover"},
+    "sunny":   {"multiplier": 1.15, "variability": 0.05, "label": "Clear sunny day"},
+    "normal":  {"multiplier": 1.00, "variability": 0.20, "label": "Normal / mixed clouds"},
+    "cloudy":  {"multiplier": 0.55, "variability": 0.35, "label": "Overcast, patchy clouds"},
+    "monsoon": {"multiplier": 0.30, "variability": 0.45, "label": "Heavy monsoon cloud cover"},
 }
 DEFAULT_SCENARIO = "normal"
