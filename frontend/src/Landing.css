@@ -46,6 +46,13 @@
   justify-content: center;
 }
 
+.cta-panel {
+  /* dark backdrop so the heading stays readable over the wave lines */
+  padding: 36px clamp(16px, 4vw, 48px);
+  border-radius: 20px;
+  background: radial-gradient(ellipse at center, rgba(14, 15, 16, 0.92) 0%, rgba(14, 15, 16, 0.78) 60%, rgba(14, 15, 16, 0) 100%);
+}
+
 .landing-footer { text-align: center; padding: 32px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-foreground); }
 
 .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }

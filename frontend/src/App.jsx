@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import Landing from './Landing.jsx'
-import Dashboard from './Dashboard.jsx'
+
+const Dashboard = lazy(() => import('./Dashboard.jsx'))
 
 export default function App() {
   const [view, setView] = useState('landing')
@@ -8,6 +9,8 @@ export default function App() {
   return view === 'landing' ? (
     <Landing onStart={() => setView('dashboard')} />
   ) : (
-    <Dashboard onBack={() => setView('landing')} />
+    <Suspense fallback={null}>
+      <Dashboard onBack={() => setView('landing')} />
+    </Suspense>
   )
 }

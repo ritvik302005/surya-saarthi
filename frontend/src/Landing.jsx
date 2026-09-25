@@ -1,10 +1,14 @@
-import { useEffect, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LiquidButton } from '@/components/ui/liquid-glass-button'
-import { WebGLShader } from '@/components/ui/web-gl-shader'
-import { Waves } from '@/components/ui/wave-background'
 import './Landing.css'
+
+// The animated backgrounds pull in three.js and simplex-noise; load them after
+// the page is up so the first paint doesn't wait on ~500 KB of decoration.
+const WebGLShader = lazy(() => import('@/components/ui/web-gl-shader').then((m) => ({ default: m.WebGLShader })))
+const Waves = lazy(() => import('@/components/ui/wave-background').then((m) => ({ default: m.Waves })))
+const REPO_URL = 'https://github.com/ritvik302005/microgrid-agent'
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false)
@@ -59,11 +63,15 @@ export default function Landing({ onStart }) {
           <span className="h-2 w-2 rounded-full bg-battery" />
           Microgrid Control
         </span>
-        <Button variant="outline" size="sm" onClick={onStart}>Open dashboard</Button>
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="sm" nativeButton={false}
+                  render={<a href={REPO_URL} target="_blank" rel="noreferrer" />}>GitHub</Button>
+          <Button variant="outline" size="sm" onClick={onStart}>Open dashboard</Button>
+        </div>
       </nav>
 
       <section className="landing-hero">
-        {!reducedMotion && <WebGLShader className="opacity-60 pointer-events-none" />}
+        {!reducedMotion && <Suspense fallback={null}><WebGLShader className="opacity-60 pointer-events-none" /></Suspense>}
         <div className="hero-fade" />
 
         <Badge variant="outline" className="relative z-10 mb-5 font-mono text-[0.7rem] tracking-wider text-battery border-battery/30 uppercase">
@@ -73,8 +81,9 @@ export default function Landing({ onStart }) {
           The sun doesn't send an invoice.<br />Most microgrids waste it anyway.
         </h1>
         <p className="relative z-10 text-muted-foreground text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed max-w-xl mb-9">
-          A LangGraph agent that decides, every cycle, whether to draw from solar, battery, or
-          grid — and is honest enough to admit when its own forecast was wrong.
+          An AI agent that decides every hour whether to use solar, battery or grid power — storing
+          sunshine for the evening peak, exporting the rest, moving flexible jobs to cheaper hours —
+          and replanning when its own forecast turns out wrong.
         </p>
         <LiquidButton size="xl" onClick={onStart} className="relative z-10">See it decide →</LiquidButton>
 
@@ -123,9 +132,11 @@ export default function Landing({ onStart }) {
 
       <section className="landing-section cta-section">
         {!reducedMotion && (
-          <Waves className="absolute inset-0" strokeColor="#4fd8c4" backgroundColor="transparent" pointerSize={0.4} />
+          <Suspense fallback={null}>
+            <Waves className="absolute inset-0" strokeColor="#4fd8c4" backgroundColor="transparent" pointerSize={0.4} />
+          </Suspense>
         )}
-        <div className="relative z-10">
+        <div className="relative z-10 cta-panel">
           <Reveal><span className="section-eyebrow">Live demo</span></Reveal>
           <Reveal delay={80}><h2>Run it yourself. Watch the battery, the grid, and the reasoning change in real time.</h2></Reveal>
           <Reveal delay={160}><LiquidButton size="xl" onClick={onStart} className="mt-8">Start live session →</LiquidButton></Reveal>
@@ -134,6 +145,7 @@ export default function Landing({ onStart }) {
 
       <footer className="landing-footer">
         <span>Sense → Allocate → Safety limits → Apply → Replan if needed → Report</span>
+        <span className="block mt-2">SDG 7 · Affordable &amp; Clean Energy · <a href={REPO_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Source on GitHub</a></span>
       </footer>
     </div>
   )
