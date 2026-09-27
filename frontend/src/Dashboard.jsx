@@ -4,7 +4,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/com
 import { Badge } from '@/components/ui/badge'
 import { Separator } from '@/components/ui/separator'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import EnergyFlow from './EnergyFlow.jsx'
+import EnergyView from './EnergyView.jsx'
 import PipelineStepper from './PipelineStepper.jsx'
 import HistoryChart from './HistoryChart.jsx'
 import HistoryModal from './HistoryModal.jsx'
@@ -425,11 +425,12 @@ export default function Dashboard({ onBack }) {
                 <div className="legend">
                   <span><i style={{ background: 'var(--solar)' }} />Solar</span>
                   <span><i style={{ background: 'var(--battery)' }} />Battery</span>
-                  {state.grid_available === false
-                    ? <span><i style={{ background: 'var(--genset)' }} />Genset (power cut)</span>
-                    : <span><i style={{ background: 'var(--grid)' }} />Grid (last resort)</span>}
+                  <span><i style={{ background: 'var(--grid)' }} />Grid</span>
+                  <span><i style={{ background: 'var(--genset)' }} />Genset (power cuts)</span>
                 </div>
-                <EnergyFlow
+                <EnergyView
+                  solarGenKw={state.solar_kw || 0}
+                  socPct={state.battery_soc_pct ?? 50}
                   solarKw={decision.solar_used_kw || 0}
                   batteryKw={decision.battery_used_kw || 0}
                   gridKw={decision.grid_used_kw || 0}

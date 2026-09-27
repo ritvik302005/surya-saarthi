@@ -108,7 +108,9 @@ Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Full cred
 ## Stack
 
 - **Backend:** FastAPI + LangGraph + SciPy (HiGHS MILP solver) + LangChain/Groq for the LLM
-- **Frontend:** React + Vite + Tailwind: live dashboard, energy flow, operator notes, what-if, comparison, history
+- **Frontend:** React + Vite + Tailwind: live dashboard, 3D energy scene, operator notes, what-if, comparison, history
+
+The dashboard's energy view is a small 3D site built with three.js ([frontend/src/EnergyScene3D.jsx](frontend/src/EnergyScene3D.jsx)): solar array under a sun that follows the output, battery cabinet showing its charge, transmission tower (dark in a power cut), diesel genset (shakes and smokes when running) and the house (windows dim if load goes unserved), with glowing particles flowing faster and denser with more kW. Numbers are HTML labels pinned to each model. Without WebGL it falls back to the flat diagram ([EnergyFlow.jsx](frontend/src/EnergyFlow.jsx)); with reduced motion it renders a still scene; screen readers get a one-sentence summary.
 
 ## Running it locally
 

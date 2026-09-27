@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge'
 import { LiquidButton } from '@/components/ui/liquid-glass-button'
 import { Sun, BatteryCharging, UtilityPole, Fuel, Droplets, CarFront, House, GraduationCap, Tractor } from 'lucide-react'
 import ResultsStrip from './ResultsStrip.jsx'
+import { FallbackBoundary, hasWebGL } from './webgl.jsx'
 import results from './data/results-summary.json'
 import { PRODUCT_NAME, TAGLINE, REPO_URL, SIH_PS_ID, SIH_PS_TITLE, TEAM_NAME } from './brand.js'
 import './Landing.css'
@@ -88,6 +89,7 @@ const FAQ = [
 
 export default function Landing({ onStart }) {
   const reducedMotion = usePrefersReducedMotion()
+  const [webgl] = useState(hasWebGL)   // the hero background needs WebGL; without it, skip it
   useEffect(() => { document.title = `${PRODUCT_NAME} — AI for solar microgrids` }, [])
 
   return (
@@ -106,7 +108,11 @@ export default function Landing({ onStart }) {
       </nav>
 
       <section className="landing-hero">
-        {!reducedMotion && <Suspense fallback={null}><WebGLShader className="opacity-60 pointer-events-none" /></Suspense>}
+        {!reducedMotion && webgl && (
+          <FallbackBoundary>
+            <Suspense fallback={null}><WebGLShader className="opacity-60 pointer-events-none" /></Suspense>
+          </FallbackBoundary>
+        )}
         <div className="hero-fade" />
 
         <Badge variant="outline" className="relative z-10 mb-5 font-mono text-[0.7rem] tracking-wider text-battery border-battery/30 uppercase">

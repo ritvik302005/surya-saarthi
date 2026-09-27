@@ -16,7 +16,7 @@ function Node({ x, y, r, label, value, unit, color, dim }) {
 }
 
 export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exportKw = 0, gensetKw = 0, unservedKw = 0,
-                                     gridAvailable = true, criticalKw = 0, flexibleLoads = [], loading }) {
+                                     gridAvailable = true, criticalKw = 0, flexibleLoads = [], loading, showDeferred = true }) {
   const totalLoad = criticalKw + flexibleLoads.filter(l => !l.deferred).reduce((s, l) => s + l.power_kw, 0)
   const deferred = flexibleLoads.filter(l => l.deferred)
 
@@ -97,7 +97,7 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exp
         </g>
       </svg>
 
-      {deferred.length > 0 && (
+      {showDeferred && deferred.length > 0 && (
         <div className="deferred-strip">
           <span className="deferred-label">Deferred this hour</span>
           {deferred.map((l) => (

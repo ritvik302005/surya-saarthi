@@ -57,3 +57,21 @@
 .history-time { font-size: 0.72rem; color: var(--muted-foreground); }
 .history-row-metrics { display: flex; gap: 16px; flex-wrap: wrap; font-size: 0.78rem; margin-bottom: 8px; }
 .history-reasoning { font-size: 0.88rem; font-style: italic; color: var(--foreground); margin: 0 0 8px; }
+/* 3D energy scene (EnergyScene3D.jsx) */
+/* wider than the text column it sits in: centred, up to 1040px */
+.energy-scene { position: relative; width: min(1040px, calc(100vw - 32px)); margin: 4px 0 0 calc(50% - min(520px, 50vw - 16px));
+  aspect-ratio: 16 / 8.2; transition: opacity 0.3s; }
+.energy-scene.computing { opacity: 0.8; }
+.energy-scene canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; z-index: 0; }
+.scene-label { position: absolute; left: 0; top: 0; z-index: 1; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 1px;
+  padding: 5px 10px 6px; border-radius: 10px; white-space: nowrap; background: rgba(14, 15, 16, 0.78);
+  border: 1px solid color-mix(in srgb, var(--c) 45%, transparent); backdrop-filter: blur(4px); will-change: transform; }
+.scene-label-name { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); }
+.scene-label-value { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; line-height: 1.1; color: var(--c); }
+.scene-label-sub { font-family: var(--font-mono); font-size: 0.6rem; color: var(--muted-foreground); }
+@media (max-width: 640px) {
+  .energy-scene { aspect-ratio: 4 / 3.6; }
+  .scene-label { padding: 3px 7px 4px; }
+  .scene-label-value { font-size: 0.85rem; }
+  .scene-label-sub { display: none; }
+}
