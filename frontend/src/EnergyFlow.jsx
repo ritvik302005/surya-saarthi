@@ -76,7 +76,7 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exp
 
       {deferred.length > 0 && (
         <div className="deferred-strip">
-          <span className="deferred-label">Deferred this cycle</span>
+          <span className="deferred-label">Deferred this hour</span>
           {deferred.map((l) => (
             <span key={l.name} className="deferred-chip">{l.name.replace('_', ' ')} · until {l.deadline}</span>
           ))}

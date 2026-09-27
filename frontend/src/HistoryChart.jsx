@@ -30,7 +30,7 @@ export default function HistoryChart({ history }) {
   }
 
   if (n === 0) {
-    return <p className="panel-empty">Run a few cycles to see the trend build up here.</p>
+    return <p className="panel-empty">Run a few hours to see the trend build up here.</p>
   }
 
   const hovered = hoverIdx !== null ? history[hoverIdx] : history[n - 1]

@@ -102,8 +102,8 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 |---|---|---|---|
 | FR-UI1 | Each browser tab shall create a session id (stored in `sessionStorage`) and send it on every API call. | Two tabs → different ids in request headers | Done |
 | FR-UI2 | On load, the dashboard shall restore state, chart (last 20 cycles), totals and scenario from `/state` and `/history`. | Run 3 cycles, refresh → 3 cycles shown | Done |
-| FR-UI3 | "Run cycle" shall animate pipeline steps and show replanning when it happens. | Visual | Done |
-| FR-UI4 | "Run simulation" shall reset, then call `/cycle` N times, updating progress (hour i/N) and the latest reasoning after each hour. | 1 day → progress reaches 24/24 | Done |
+| FR-UI3 | "Run 1 hour" shall animate pipeline steps and show replanning when it happens. | Visual | Done |
+| FR-UI4 | "Simulate N days" (label follows the days input) shall reset, then call `/cycle` N times, updating progress (hour i/N) and the latest reasoning after each hour. | 1 day → progress reaches 24/24 | Done |
 | FR-UI5 | The situation panel shall show hour + day + scenario, solar now vs forecast (highlight when miss > 1 kW), price + band, essential demand + jobs running/waiting. | Visual at 19:00 → ₹9.60 "Evening peak" | Done |
 | FR-UI6 | The energy flow shall show solar→load, battery→load, grid→load, solar→battery when charging, and "exporting X kW" when exporting. | Noon on sunny day shows charging/export | Done |
 | FR-UI7 | Errors shall distinguish "can't reach the backend" (network) from "backend returned an error (status)". | Stop backend → network message | Done |

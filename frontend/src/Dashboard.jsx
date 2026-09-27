@@ -251,7 +251,10 @@ export default function Dashboard({ onBack }) {
             {PRODUCT_NAME}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
-            <div className="flex items-center gap-2 font-mono text-xs w-full sm:w-auto">
+            {/* Everything that belongs to "simulate whole days" sits in one outlined group,
+                so it reads as separate from the one-hour button. */}
+            <div role="group" aria-label="Simulate whole days"
+                 className="flex items-center gap-2 font-mono text-xs w-full sm:w-auto rounded-lg border border-border p-1 pl-1.5">
               <label htmlFor="scenario-select" className="sr-only">Weather scenario</label>
               <select
                 id="scenario-select"
@@ -274,14 +277,15 @@ export default function Dashboard({ onBack }) {
                 className="w-14 bg-secondary border border-border rounded-md px-2 py-1.5 text-foreground disabled:opacity-50"
                 title="Number of simulated days to run"
               />
-              <span className="text-muted-foreground" aria-hidden="true">day{days !== 1 ? 's' : ''}</span>
+              {/* hidden on phones: the button below already says "Simulate N days" */}
+              <span className="hidden sm:inline text-muted-foreground" aria-hidden="true">day{days !== 1 ? 's' : ''}</span>
+              <Tooltip>
+                <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={requestSimulation} disabled={simLoading || loading} className="shrink-0 font-sans" />}>
+                  {simLoading ? 'Simulating…' : `Simulate ${days} day${days !== 1 ? 's' : ''}`}
+                </TooltipTrigger>
+                <TooltipContent>Starts a fresh run and plays the chosen weather for {days} full day{days !== 1 ? 's' : ''} ({days * 24} hours) in one go.</TooltipContent>
+              </Tooltip>
             </div>
-            <Tooltip>
-              <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={requestSimulation} disabled={simLoading || loading} />}>
-                {simLoading ? 'Simulating…' : 'Run simulation'}
-              </TooltipTrigger>
-              <TooltipContent>Runs the chosen scenario for the chosen number of days in one go, instead of one cycle at a time.</TooltipContent>
-            </Tooltip>
             <div className="hidden sm:flex items-center gap-3">
               <Button variant="ghost" size="sm" onClick={onBack}>← Overview</Button>
               <Button variant="outline" size="sm" onClick={() => setHistoryOpen(true)}>History report</Button>
@@ -297,9 +301,12 @@ export default function Dashboard({ onBack }) {
               { label: 'History report', onClick: () => setHistoryOpen(true) },
               { label: 'Reset session', onClick: requestReset },
             ]} />
-            <Button onClick={runCycle} disabled={loading || simLoading} className="ml-auto sm:ml-0">
-              {loading ? 'Computing…' : 'Run cycle'}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger render={<Button onClick={runCycle} disabled={loading || simLoading} className="ml-auto sm:ml-0" />}>
+                {loading ? 'Computing…' : 'Run 1 hour'}
+              </TooltipTrigger>
+              <TooltipContent>Moves the simulation forward one hour and shows each step of the decision.</TooltipContent>
+            </Tooltip>
           </div>
         </header>
 
@@ -345,7 +352,7 @@ export default function Dashboard({ onBack }) {
               Live agent · SDG 7 · Clean energy
             </Badge>
             <h1 className="font-display font-semibold tracking-tight text-[clamp(2rem,4.5vw,3.4rem)] leading-[1.1] mb-4">
-              Every cycle, it decides where the power comes from.
+              Every hour, it decides where the power comes from.
             </h1>
             <p className="text-muted-foreground text-[clamp(0.95rem,1.4vw,1.1rem)] leading-relaxed max-w-xl mx-auto mb-2">
               An AI agent reads sunlight, prices and demand, decides how to split power between
@@ -354,7 +361,7 @@ export default function Dashboard({ onBack }) {
 
             <PipelineStepper stepIndex={stepIndex} replanFlash={replanFlash} />
             <p className="pipeline-caption">
-              Each cycle: sense real conditions → the agent proposes a split → hard safety rules can
+              Each hour: sense real conditions → the agent proposes a split → hard safety rules can
               override it → battery state updates → if the forecast was wrong, it loops back and
               replans before reporting.
             </p>
@@ -364,7 +371,8 @@ export default function Dashboard({ onBack }) {
             )}
             {!state && !error && (
               <div className="font-mono text-sm px-5 py-4 rounded-lg border border-border text-muted-foreground max-w-md mx-auto">
-                No cycle has run yet. Press Run cycle to sense conditions and allocate power.
+                Nothing has run yet. Press <span className="text-foreground">Run 1 hour</span> to watch one decision
+                step by step, or <span className="text-foreground">Simulate</span> to play whole days at once.
               </div>
             )}
 
@@ -414,7 +422,7 @@ export default function Dashboard({ onBack }) {
 
               <Card className="rounded-none border-0 gap-3.5 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
                 <CardHeader>
-                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Safety overrides this cycle</CardTitle>
+                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Safety overrides this hour</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {alerts.length === 0 ? (

@@ -68,7 +68,7 @@ Estimates are for one developer; tasks in the same milestone without a dependenc
 | 7.1 | Results table (4 scenarios) for slide 5 from `sample_results` | 5.1 |
 | 7.2 | Final images and 6-slide deck; every number traceable to assumptions table | 7.1 |
 | 7.3 | Idea submission text (title, description, abstract) | 7.1 |
-| 7.4 | 60–90 s demo video (landing → run cycle → simulation → comparison) | 6.4 |
+| 7.4 | 60–90 s demo video (landing → Run 1 hour → Simulate → comparison) | 6.4 |
 
 ### Dependency graph
 
@@ -118,7 +118,7 @@ Rule: any bug fixed in `nodes/`, `baseline.py` or `main.py` gets a failing check
 ## 6. Manual QA checklist (release gate)
 
 - [ ] Landing loads < 3 s on a throttled "Fast 3G" profile; first JS < 300 KB.
-- [ ] Landing → *See it decide* → *Run cycle* works in < 60 s for a new user.
+- [ ] Landing → *See it decide* → *Run 1 hour* works in < 60 s for a new user.
 - [ ] Situation panel, energy flow, reasoning, three cards, comparison card all update after a cycle.
 - [ ] 1-day simulation completes; progress reaches 24/24; comparison shows agent vs rules.
 - [ ] A replan appears (badge + stepper) within a 2-day normal/cloudy run.

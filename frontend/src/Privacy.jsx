@@ -72,8 +72,8 @@ export default function Privacy({ onBack }) {
 
         <h2 className="font-display">What is sent where</h2>
         <ul>
-          <li><strong>Your browser → our server (Render):</strong> the buttons you press (run a cycle,
-            run a simulation, reset) and the session ID.</li>
+          <li><strong>Your browser → our server (Render):</strong> the buttons you press (run an hour,
+            simulate days, reset) and the session ID.</li>
           <li><strong>Our server → Groq (AI provider):</strong> the simulated numbers for each hour:
             sunlight, battery, demand, price and flexible jobs. Nothing about you is sent.</li>
           <li><strong>Our server → Open-Meteo:</strong> the fixed coordinates of the simulated site

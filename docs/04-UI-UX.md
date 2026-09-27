@@ -15,7 +15,7 @@ Status tags: **Done** = in the current build · **Planned** = to build for MVP.
 1. **Show why, not just what.** Every decision is shown next to the inputs that caused it (time, sun, price, demand) and the agent's one-sentence reason.
 2. **Safety is visible.** When a hard rule overrides the AI, say so in plain words. "No overrides" is also shown.
 3. **Honest numbers.** Every figure has a baseline ("vs grid-only", "vs rule-based") and simulated inputs are labelled.
-4. **One primary action per screen.** Landing → *See it decide*. Dashboard → *Run cycle* (or *Run simulation*).
+4. **One primary action per screen.** Landing → *See it decide*. Dashboard → *Run 1 hour* (or *Simulate N days*).
 5. **Calm, technical, dark.** Low-chrome dark UI; colour is reserved for energy sources and status.
 6. **Plain language for non-experts.** Prefer "sunlight", "battery", "grid price" over jargon; technical terms (LangGraph, SOC) stay in docs, not headlines.
 
@@ -29,7 +29,7 @@ journey
     Scroll problem + "how it decides": 4: Viewer
   section Try
     Click "See it decide": 5: Viewer
-    Press "Run cycle", watch pipeline: 5: Viewer
+    Press "Run 1 hour", watch pipeline: 5: Viewer
     Read situation panel + reasoning: 4: Viewer
   section Trust
     See safety overrides card: 4: Viewer
@@ -43,8 +43,8 @@ journey
 
 ```
 Landing (/)                       Dashboard (same URL, view state)
-├─ Nav: brand · GitHub · Open dashboard      ├─ Header: brand · scenario · days · Run simulation
-├─ Hero + CTA "See it decide"                │          · ← Overview · History report · Reset session · Run cycle
+├─ Nav: brand · GitHub · Open dashboard      ├─ Header: brand · [scenario · days · Simulate N days]
+├─ Hero + CTA "See it decide"                │          · ← Overview · History report · Reset session · Run 1 hour
 ├─ Results strip (hidden until data)                ├─ Simulation progress bar (while running)
 ├─ The problem                               ├─ Intro + pipeline stepper
 ├─ How it decides (6 stages)                 ├─ Situation panel
@@ -95,7 +95,7 @@ Skip link moves focus to `<main>` directly (a normal `#anchor` would change the 
 ### 4.2 Dashboard — Done
 | Region | Content | Behaviour |
 |---|---|---|
-| Header (sticky) | Scenario select (from `/scenarios`), days input (1–7), *Run simulation* (secondary, tooltip), *← Overview*, *History report*, *Reset session* (tooltip), *Run cycle* (primary) | Status dot: grey idle, pulsing solar while computing, battery-green when a state exists. Controls disabled while a simulation runs. |
+| Header (sticky) | Outlined group `role="group"` "Simulate whole days": scenario select (from `/scenarios`), days input (1–7), *Simulate N days* (secondary, tooltip; label follows the days input). Then *← Overview*, *History report*, *Reset session* (tooltip), *Run 1 hour* (primary, tooltip) | The group keeps the multi-day controls visibly separate from the one-hour button. Below 640 px the "days" text is hidden (the button already says it). Status dot: grey idle, pulsing solar while computing, battery-green when a state exists. Controls disabled while a simulation runs. |
 | Progress bar | "Simulating {scenario}… i/N hours", bar, latest status line (solar, grid, replanned, reasoning) | Only while simulating |
 | Intro | Badge "Live agent · SDG 7 · Clean energy", H1, sub-line, pipeline stepper, caption | Stepper: pending/active/done per stage; "↻ replanning" on Allocate |
 | Situation panel | 4 tiles: **Time** (HH:00, Day n · scenario), **Sunlight** (kW now; "forecast said X kW" — red + "so it replans" when miss > 1 kW), **Grid price** (₹/kWh; band text coloured: solar hours = battery, peak = grid, normal = muted), **Demand** (essential kW; jobs running · waiting) | 2 columns on mobile, 4 on desktop |
@@ -110,12 +110,12 @@ Skip link moves focus to `<main>` directly (a normal `#anchor` would change the 
 ## 5. Key user flows
 
 **F1 — Run one cycle**
-1. Click *Run cycle* → button shows "Computing…", stepper animates Sense → Allocate → Safety → Apply (≈ 420 ms each).
+1. Click *Run 1 hour* → button shows "Computing…", stepper animates Sense → Allocate → Safety → Apply (≈ 420 ms each).
 2. Response arrives → if replanned, stepper jumps back to Allocate with "↻ replanning" for ~550 ms.
 3. Stepper lands on Report; all regions update; totals add this cycle.
 
 **F2 — Run a simulation**
-1. Pick scenario and days → *Run simulation*.
+1. Pick scenario and days → *Simulate N days* (label follows the days box).
 2. Session resets; progress bar appears; each hour updates every region live.
 3. Finish → progress bar disappears; comparison card shows the full-run result.
 4. Error mid-run → loop stops, error banner shows, completed hours remain.
@@ -127,7 +127,7 @@ Skip link moves focus to `<main>` directly (a normal `#anchor` would change the 
 1. *Download results (CSV)* (comparison card) or *History report → Download log (.txt)*; both use `?session=` links.
 
 **F5 — Saved results (Planned)**
-1. *Load saved results* next to *Run simulation* → choose scenario → dashboard renders the pre-computed run instantly, labelled "Saved run", with no AI calls.
+1. *Load saved results* next to *Simulate N days* → choose scenario → dashboard renders the pre-computed run instantly, labelled "Saved run", with no AI calls.
 
 ## 6. Components
 
@@ -153,7 +153,7 @@ Skip link moves focus to `<main>` directly (a normal `#anchor` would change the 
 - Energy-flow dashes animate only on active paths (> 0.05 kW); whole diagram dims slightly while computing.
 - Landing sections fade/slide in once on scroll (0.8 s); disabled for reduced motion.
 - Hover: buttons lighten; chart shows a vertical guide and tooltip for the nearest cycle.
-- Tooltips on *Run simulation* and *Reset session* explain the action (200 ms delay).
+- Tooltips on *Run 1 hour*, *Simulate N days* and *Reset session* explain the action (200 ms delay).
 
 ## 8. Forms and inputs
 
@@ -168,8 +168,8 @@ No free-text inputs in the MVP.
 
 | Region | Loading | Empty | Error |
 |---|---|---|---|
-| Dashboard (no session yet) | — | "No cycle has run yet. Press Run cycle to sense conditions and allocate power." | Red bordered banner with message from `errorMessage()` |
-| Run cycle | Button "Computing…", status dot pulses, stepper animates | — | Banner; stepper stays; previous data kept |
+| Dashboard (no session yet) | — | "Nothing has run yet. Press Run 1 hour to watch one decision step by step, or Simulate to play whole days at once." | Red bordered banner with message from `errorMessage()` |
+| Run 1 hour | Button "Computing…", status dot pulses, stepper animates | — | Banner; stepper stays; previous data kept |
 | Simulation | Progress bar with hour i/N and status line | — | Banner; completed hours kept |
 | Safety overrides card | — | "No overrides triggered — the proposed allocation stayed within every limit." | — |
 | History chart | — | "Run a few cycles to see the trend build up here." | — |
