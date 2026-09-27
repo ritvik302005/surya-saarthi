@@ -28,7 +28,7 @@ Safety rules enforced after the LLM, every cycle: battery stays above the 20% re
 
 ### Time-of-Day tariff
 
-Grid price follows India's 2023 Time-of-Day rules: solar hours (09–17) are 20% cheaper and the evening peak (18–22) is 20% costlier than the ₹8/kWh base. The agent sees the next 8 hours of prices, so it saves battery for the peak and moves flexible loads out of it.
+Grid price follows India's 2023 Time-of-Day rules: solar hours (09–17) are at least 20% cheaper than normal, and the evening peak (18–22) is 10–20% costlier, set by each state; we assume 20%. Normal price is ₹8/kWh. The agent sees the next 8 hours of prices, so it saves battery for the peak and moves flexible loads out of it.
 
 ### Agent vs rule-based comparison
 
@@ -47,7 +47,7 @@ Each browser tab gets its own session (the frontend sends an `X-Session-Id` head
 | Location | Delhi (28.61 N, 77.21 E) | `config.LATITUDE/LONGITUDE` |
 | Solar system | 10 kW | `config.SYSTEM_CAPACITY_KW` |
 | Battery | 10 kWh, starts at 60%, 20% reserve, 5 kW max charge/discharge | `config.py`, `nodes/sensing.py` |
-| Grid tariff | ₹8/kWh base; 09–17 ₹6.40 (−20%), 18–22 ₹9.60 (+20%) | `config.TOD_MULTIPLIERS` (2023 ToD rules) |
+| Grid tariff | ₹8/kWh base; 09–17 ₹6.40 (−20%), 18–22 ₹9.60 (+20%; the peak surcharge is 10–20%, set by each state; we assume 20%) | `config.TOD_MULTIPLIERS` (2023 ToD rules) |
 | Export credit | ₹3/kWh — **assumption**, varies by state/DISCOM | `config.EXPORT_CREDIT_RS_PER_KWH` |
 | CO₂ factor | 0.71 kg/kWh (CEA CO₂ Baseline Database v21.0) | `config.GRID_EMISSION_FACTOR_KG_PER_KWH` |
 | Essential load | Daily home/small-campus profile, 1.5–3.8 kW, ±10% | `nodes/sensing.py` |
@@ -62,6 +62,13 @@ Each browser tab gets its own session (the frontend sends an `X-Session-Id` head
 - [Architecture](docs/03-Architecture.md) — components, data flow, API, deployment
 - [UI/UX](docs/04-UI-UX.md) — screens, flows, states, design tokens
 - [Development plan](docs/05-Development-Plan.md) — remaining milestones and Definition of Done
+- [Third-party notices](THIRD_PARTY_NOTICES.md) — data, fonts, icons, packages and adapted components, with licences
+
+## Privacy, credits and disclaimer
+
+The site has a **Privacy & Disclaimer** page (`#/privacy`, linked from both footers): no cookies, no analytics, fonts served from the site (no Google requests), only a random session ID in the browser, and only simulated numbers sent to the AI. It is a simulation: not for controlling real equipment, and provided without warranty.
+
+Weather data by [Open-Meteo.com](https://open-meteo.com/) (CC BY 4.0). Full credits are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and on the site at `#/credits`.
 
 ## Stack
 

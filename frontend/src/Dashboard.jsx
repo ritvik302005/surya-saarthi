@@ -252,7 +252,9 @@ export default function Dashboard({ onBack }) {
           </div>
           <div className="flex items-center gap-2 sm:gap-3 flex-wrap justify-start sm:justify-end w-full sm:w-auto">
             <div className="flex items-center gap-2 font-mono text-xs w-full sm:w-auto">
+              <label htmlFor="scenario-select" className="sr-only">Weather scenario</label>
               <select
+                id="scenario-select"
                 value={scenario}
                 onChange={(e) => setScenario(e.target.value)}
                 disabled={simLoading}
@@ -263,14 +265,16 @@ export default function Dashboard({ onBack }) {
                   <option key={key} value={key} style={{ color: '#111827', backgroundColor: '#fff' }}>{label}</option>
                 ))}
               </select>
+              <label htmlFor="sim-days" className="sr-only">Days to simulate (1 to 7)</label>
               <input
+                id="sim-days"
                 type="number" min={1} max={7} value={days}
                 onChange={(e) => setDays(Math.min(7, Math.max(1, Number(e.target.value) || 1)))}
                 disabled={simLoading}
                 className="w-14 bg-secondary border border-border rounded-md px-2 py-1.5 text-foreground disabled:opacity-50"
                 title="Number of simulated days to run"
               />
-              <span className="text-muted-foreground">day{days !== 1 ? 's' : ''}</span>
+              <span className="text-muted-foreground" aria-hidden="true">day{days !== 1 ? 's' : ''}</span>
             </div>
             <Tooltip>
               <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={requestSimulation} disabled={simLoading || loading} />}>
@@ -459,8 +463,13 @@ export default function Dashboard({ onBack }) {
           )}
         </main>
 
-        <footer className="mt-auto text-center py-8 border-t border-border font-mono text-xs tracking-wide text-muted-foreground">
-          Sense → Allocate → Safety limits → Apply → Replan if needed → Report
+        <footer className="mt-auto text-center px-4 py-8 border-t border-border font-mono text-xs tracking-wide text-muted-foreground">
+          <span className="block">Sense → Allocate → Safety limits → Apply → Replan if needed → Report</span>
+          <span className="block mt-2">
+            <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Weather data by Open-Meteo.com</a>
+            {' · '}Simulation only, not for real equipment{' · '}
+            <a href="#/privacy" className="underline underline-offset-4 hover:text-foreground">Privacy &amp; Disclaimer</a>
+          </span>
         </footer>
 
         <HistoryModal open={historyOpen} onOpenChange={setHistoryOpen} />

@@ -10,4 +10,6 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
     },
   },
+  // keep /*! licence and credit comments (e.g. the MIT notice in wave-background.jsx) in the built files
+  build: { rolldownOptions: { output: { comments: { legal: true } } } },
 })

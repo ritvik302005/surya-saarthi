@@ -51,12 +51,15 @@ Landing (/)                       Dashboard (same URL, view state)
 ├─ What it manages                           ├─ Energy flow + deferred jobs strip
 ├─ Who it's for                              ├─ Reasoning quote (+ "Replanned" badge)
 ├─ Safety statement                          ├─ Cards: Battery reserve · Safety overrides · Session impact
-├─ Live-demo CTA                             ├─ Agent vs rule-based card (+ CSV link)
-└─ Footer: loop · SDG 7 · GitHub             ├─ Power-mix history chart
-                                             └─ History report (modal)
+├─ FAQ                                       ├─ Agent vs rule-based card (+ CSV link)
+├─ Live-demo CTA                             ├─ Power-mix history chart
+└─ Footer: SIH · SDG 7 · Open-Meteo ·        ├─ History report (modal)
+   GitHub · Privacy · Credits                └─ Footer: loop · Open-Meteo · Privacy
+
+Privacy & Disclaimer (#/privacy; #/credits scrolls to Credits & licences)
 ```
 
-Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is lazy-loaded. Browser back does not switch views (acceptable for MVP; Planned: hash route `#/dashboard` so links and back work). Each view sets its own page title ("Surya Saarthi — AI for solar microgrids" / "Dashboard · Surya Saarthi"). Both views start with a keyboard-only "Skip to content" link. Link previews use `public/og-image.png` (1200×630) via Open Graph / Twitter tags in `index.html`.
+Single-page app; `App.jsx` switches `landing` ↔ `dashboard`, and shows the Privacy & Disclaimer page when the hash is `#/privacy` or `#/credits` (browser Back returns to the view it was opened from). The dashboard and privacy page are lazy-loaded. Browser back does not switch views (acceptable for MVP; Planned: hash route `#/dashboard` so links and back work). Each view sets its own page title ("Surya Saarthi — AI for solar microgrids" / "Dashboard · Surya Saarthi"). Both views start with a keyboard-only "Skip to content" link. Link previews use `public/og-image.png` (1200×630) via Open Graph / Twitter tags in `index.html`.
 
 ## 4. Screens
 
@@ -64,16 +67,30 @@ Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is 
 | Section | Content | Notes |
 |---|---|---|
 | Nav (sticky) | Brand dot + "Surya Saarthi" (name, tagline, SIH ID and team name live in `src/brand.js`); *GitHub* (ghost); *Open dashboard* (outline) | Backdrop blur, hairline bottom border |
-| Hero | Badge "SDG 7 · Affordable & Clean Energy"; H1 "The sun doesn't send an invoice. Most microgrids waste it anyway."; plain-language sub-line; liquid-glass CTA *See it decide →*; scroll cue | WebGL background at 60% opacity (lazy, hidden for reduced motion) |
+| Hero | Badge "SDG 7 · Affordable & Clean Energy"; H1 "The sun doesn't send an invoice. Many microgrids waste it anyway."; plain-language sub-line; liquid-glass CTA *See it decide →*; scroll cue | WebGL background at 60% opacity (lazy, hidden for reduced motion) |
 | Results strip | 4 tiles from `src/data/results-summary.json` (written by `run_scenarios.py`): cost reduction range, grid reduction range, ₹ saved/day vs rules, essential-load outages; note line with method | Hidden while the summary has no scenarios, so unvalidated numbers never show |
-| The problem | Eyebrow, H2 statement, two paragraphs (PM Surya Ghar; 2023 ToD rules) | |
+| The problem | Eyebrow, H2 statement ("Many rooftop and campus solar systems…"), two paragraphs (PM Surya Ghar; 2023 ToD rules: solar hours at least 20% cheaper, peak 10–20% costlier, set by each state; we assume 20%) | Claims stay hedged ("many", "often"); no unsourced comparisons |
 | How it decides | Six numbered rows: Sense, Allocate, Safety limits, Apply, Replan, Report | Reveal on scroll |
 | What it manages | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
 | Who it's for | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
-| Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph | Centered |
+| Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph ending "The model suggests; the rules decide." | Centered |
 | FAQ ("Questions judges ask") | Six native `<details>` items: real data?, AI mistakes?, internet?, better than today?, cost?, real equipment? | Keyboard-accessible, + / × indicator |
 | Live-demo CTA | Eyebrow, H2, *Start live session →* over animated waves | Dark radial panel behind text for contrast |
-| Footer | Loop summary; SDG 7 · Source on GitHub | Mono, small |
+| Footer | Name, tagline, SIH line, SDG 7; links: *Weather data by Open-Meteo.com* (required CC BY 4.0 attribution), *Source on GitHub*, *Privacy & Disclaimer*, *Credits & licences* | Mono, small; links wrap on phones |
+
+### 4.3 Privacy & Disclaimer — Done
+| Section | Content |
+|---|---|
+| Nav | Brand; *← Back* (outline) |
+| Header | "Last updated" eyebrow, H1, one-line lead |
+| What is stored | Session ID in sessionStorage (cleared on tab close); in-memory server session (100 most recent, lost on restart); server cycle log (numbers + reasoning, no ID); no personal details asked |
+| What is sent where | Browser → Render; Render → Groq (simulated numbers only); Render → Open-Meteo (fixed site coordinates); host access logs (Vercel, Render); nothing loaded from Google or other third parties |
+| No cookies, no tracking | No cookies, analytics, ads, pixels or fingerprinting |
+| This is a simulation | Simulated site and demand; assumptions in README; savings are simulation results; not for real equipment |
+| No warranty | "As is"; no liability to the extent the law allows. No contact line (by decision) |
+| Credits & licences (`#credits`) | Open-Meteo, CEA CO₂ database, gpt-oss-20b, fonts (OFL), Lucide (ISC), UI and server packages, adapted 21st.dev components; link to `THIRD_PARTY_NOTICES.md` |
+
+Skip link moves focus to `<main>` directly (a normal `#anchor` would change the route). Update "Last updated" in `Privacy.jsx` whenever data handling changes.
 
 ### 4.2 Dashboard — Done
 | Region | Content | Behaviour |
@@ -142,8 +159,8 @@ Single-page app; `App.jsx` switches `landing` ↔ `dashboard`. The dashboard is 
 
 | Control | Rules |
 |---|---|
-| Scenario select | Options from `/scenarios`; defaults to server default; disabled while simulating; option text dark on light for native dropdown readability |
-| Days | Number input 1–7; clamped on change; label "day/days" pluralised |
+| Scenario select | `<label>` "Weather scenario" (visually hidden) tied by `id="scenario-select"`; options from `/scenarios`; defaults to server default; disabled while simulating; option text dark on light for native dropdown readability |
+| Days | `<label>` "Days to simulate (1 to 7)" (visually hidden) tied by `id="sim-days"`; number input 1–7; clamped on change; visible "day/days" text is `aria-hidden` so it isn't read twice |
 
 No free-text inputs in the MVP.
 
@@ -180,6 +197,8 @@ Below 640 px the header is two rows (brand; controls) and Overview / History rep
 - Colour is never the only signal: overrides are text, replans have a badge, price band has a label.
 - `prefers-reduced-motion` respected (backgrounds hidden, no count-up, no reveal).
 - Hit targets ≥ 32 px high for header buttons.
+- Every form control has a programmatic label (checked with an accessibility-tree snapshot: `combobox "Weather scenario"`, `spinbutton "Days to simulate (1 to 7)"`).
+- Footer links reachable by Tab with a visible focus style; Enter opens the privacy page.
 
 ## 12. Visual design
 
@@ -202,6 +221,8 @@ Below 640 px the header is two rows (brand; controls) and Overview / History rep
 | Display (H1–H3, big numbers) | Space Grotesk 500–600 | H1 `clamp(2rem, 4.5vw, 3.4rem)` dashboard / `clamp(2.2rem, 5.5vw, 4.2rem)` landing; stats 1.5rem |
 | Body | Inter 400–500 | 0.95–1.1rem, line-height 1.6–1.7 |
 | Labels, eyebrows, data | JetBrains Mono | 0.65–0.75rem, uppercase, tracking 0.04–0.12em |
+
+Fonts are self-hosted variable fonts from Fontsource (`@fontsource-variable/space-grotesk`, `inter`, `jetbrains-mono`, imported in `main.jsx`; CSS families "Space Grotesk Variable" etc.). The site makes no requests to Google Fonts. All three are SIL Open Font License 1.1.
 
 ### Spacing and shape
 - Base unit 4 px (Tailwind scale). Section padding `clamp(60px, 10vw, 120px)` landing; dashboard content max-width 48rem (intro) / 72rem (cards).

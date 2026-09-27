@@ -13,7 +13,7 @@
 
 India is installing rooftop solar and batteries quickly (for example under **PM Surya Ghar Muft Bijli Yojana**), but the software that decides *where each unit of power comes from* is usually a fixed rule: "use solar, then battery until X%, then grid". That rule:
 
-1. **Ignores time-of-day prices.** Since the 2023 Time-of-Day (ToD) tariff rules, power is ≥20% cheaper in solar hours and ≥20% costlier at the evening peak. A fixed rule drains the battery before the peak and then buys expensive grid power.
+1. **Ignores time-of-day prices.** Since the 2023 Time-of-Day (ToD) tariff rules, power is at least 20% cheaper in solar hours and 10–20% costlier at the evening peak (set by each state; we assume 20%). A fixed rule drains the battery before the peak and then buys expensive grid power.
 2. **Ignores the weather forecast.** It cannot keep battery in reserve when clouds are coming.
 3. **Wastes or under-values surplus solar.** Surplus is exported cheaply (or curtailed) instead of being stored for the peak.
 4. **Runs flexible loads at the wrong time.** Water pumps and EV charging run whenever they are switched on, often at peak price.
@@ -59,7 +59,7 @@ For the MVP, **P4 is the primary user** (the product is demonstrated in simulati
 | F3 | **AI allocation with reasoning**: LLM proposes solar/battery/grid split and which flexible jobs to defer, with a one-sentence reason | Done |
 | F4 | **Hard safety layer**: 20% reserve, 5 kW rate limits, no phantom solar, all non-deferred load powered, deadline enforcement, surplus solar stored, tolerance for rounding | Done |
 | F5 | **Replanning**: if actual solar misses the forecast by > 1 kW, decide again (once) with a more conservative instruction | Done |
-| F6 | **Time-of-Day tariff** (solar hours −20%, peak +20%) with 8 hours of prices visible to the agent | Done |
+| F6 | **Time-of-Day tariff** (solar hours −20%; peak +20%, since the peak surcharge is 10–20%, set by each state, and we assume 20%) with 8 hours of prices visible to the agent | Done |
 | F7 | **Flexible loads**: water pump and EV jobs can be deferred, carry forward, and must run before their deadline | Done |
 | F8 | **Net-metering export** of surplus solar, credited at a configurable rate | Done |
 | F9 | **Rule-based comparison**: fixed-rule controller on identical inputs; grid kWh, net cost, self-use %, export, renewable share | Done |
@@ -114,7 +114,7 @@ Measured results for the current build are recorded in `backend/sample_results/`
 | Area | Assumption |
 |---|---|
 | Site | Delhi; 10 kW solar; 10 kWh battery starting at 60%; 20% reserve; 5 kW max charge/discharge |
-| Tariff | ₹8/kWh base; ToD: 09–17 ×0.8, 18–22 ×1.2 |
+| Tariff | ₹8/kWh base; ToD: 09–17 ×0.8, 18–22 ×1.2 (the peak surcharge is 10–20%, set by each state; we assume 20%) |
 | Export | ₹3/kWh credit — **assumption**, varies by state/DISCOM; export ≤ system size |
 | CO₂ | 0.71 kg/kWh (CEA CO₂ Baseline Database v21.0); exported solar counts as avoided grid energy |
 | Demand | Simulated daily profile 1.5–3.8 kW (±10%); pump 1.5 kW 06–09 due 10:00; EV 3 kW 18–22 due 06:00 |

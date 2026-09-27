@@ -1,4 +1,6 @@
 "use client"
+/*! Liquid Glass Button by Ali Imam (https://21st.dev/@designali-in/components/liquid-glass-button).
+ * Licence not stated by the author. Adapted for Surya Saarthi. */
 
 import * as React from "react"
 import { Slot } from "@radix-ui/react-slot"

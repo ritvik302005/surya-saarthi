@@ -82,6 +82,26 @@
 }
 
 .landing-footer { text-align: center; padding: 32px; border-top: 1px solid var(--border); font-family: var(--font-mono); font-size: 0.72rem; color: var(--muted-foreground); }
+.footer-links { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px; margin-top: 10px; }
+.footer-links a { text-decoration: underline; text-underline-offset: 4px; }
+.footer-links a:hover { color: var(--foreground); }
+
+/* Privacy & Disclaimer page */
+.info-page { flex: 1; width: 100%; max-width: 760px; margin: 0 auto; padding: clamp(40px, 7vw, 80px) clamp(16px, 5vw, 56px) clamp(60px, 8vw, 96px); }
+.info-page h1 { font-weight: 600; font-size: clamp(2rem, 4.5vw, 2.8rem); line-height: 1.1; letter-spacing: -0.01em; margin: 0 0 16px; }
+.info-page h2 { font-weight: 600; font-size: 1.25rem; margin: 44px 0 12px; scroll-margin-top: 90px; }
+.info-page p, .info-page li, .info-page dd { color: var(--muted-foreground); font-size: 0.98rem; line-height: 1.7; }
+.info-page p { margin: 0 0 12px; }
+.info-page strong { color: var(--foreground); font-weight: 600; }
+.info-page ul { margin: 0; padding-left: 1.2em; list-style: disc; display: flex; flex-direction: column; gap: 10px; }
+.info-page li::marker { color: var(--battery); }
+.info-lead { font-size: 1.08rem !important; }
+.credits-list { margin: 0; display: flex; flex-direction: column; border-top: 1px solid var(--border); }
+.credits-list > div { display: grid; grid-template-columns: 9.5rem 1fr; gap: 4px 20px; padding: 14px 0; border-bottom: 1px solid var(--border); }
+.credits-list dt { font-family: var(--font-mono); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--foreground); padding-top: 4px; }
+.credits-list dd { margin: 0; font-size: 0.92rem; }
+.info-small { margin-top: 16px !important; font-size: 0.85rem !important; }
+@media (max-width: 560px) { .credits-list > div { grid-template-columns: 1fr; } }
 
 .reveal { opacity: 0; transform: translateY(24px); transition: opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1), transform 0.8s cubic-bezier(0.16, 1, 0.3, 1); }
 .reveal.revealed { opacity: 1; transform: translateY(0); }

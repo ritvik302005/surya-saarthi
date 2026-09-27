@@ -40,8 +40,9 @@ Two deployable units, two external services. No database.
 ```mermaid
 flowchart TB
   subgraph Frontend [frontend/src]
-    L[Landing.jsx] --> APP[App.jsx<br/>lazy-loads Dashboard]
+    L[Landing.jsx] --> APP[App.jsx<br/>lazy-loads Dashboard, Privacy]
     APP --> D[Dashboard.jsx]
+    APP --> PV[Privacy.jsx<br/>#/privacy, #/credits]
     D --> SP[SituationPanel]
     D --> EF[EnergyFlow]
     D --> PS[PipelineStepper]
@@ -156,6 +157,7 @@ Error convention (target, SRS FR-API6/7): `400` invalid input, `404` nothing to 
 - CORS: `*` for the demo → restrict to the Vercel origin for production (`allow_origins=[FRONTEND_URL]`).
 - Dependencies pinned; `npm audit` / `pip-audit` before release.
 - Planned: per-session rate limit on `/cycle` and `/simulate` to protect the Groq quota.
+- Privacy: the browser only talks to the site and the backend (fonts self-hosted; no cookies or analytics). Groq receives simulated numbers only; Open-Meteo receives the fixed site coordinates. The cycle log file holds no session id or IP. Details on the in-app Privacy & Disclaimer page.
 
 ## 9. Deployment
 

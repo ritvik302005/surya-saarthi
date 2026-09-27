@@ -36,9 +36,9 @@
   --battery: #4fd8c4;
   --grid: #ff6b5c;
 
-  --font-display: "Space Grotesk", "Segoe UI", sans-serif;
-  --font-body: "Inter", "Segoe UI", sans-serif;
-  --font-mono: "JetBrains Mono", "Consolas", monospace;
+  --font-display: "Space Grotesk Variable", "Segoe UI", sans-serif;
+  --font-body: "Inter Variable", "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "Consolas", monospace;
 
   /* legacy aliases — EnergyFlow.jsx / HistoryChart.jsx / PipelineStepper.jsx
      reference these var names directly and are staying unchanged */

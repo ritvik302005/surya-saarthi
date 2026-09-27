@@ -25,6 +25,7 @@ Most of the MVP is already built. This plan records what is done (so nobody rebu
 | **M2 — Decision quality & reliability** | Groq retry/back-off + `reasoning_effort=low`; ToD tariff with 8 h prices; 8 h solar forecast; net-metering export; daily demand profile; weather refresh; pinned dependencies | Done |
 | **M3 — Proof & visibility** | Rule-based baseline + comparison summary; CSV + text exports; situation panel; comparison card; charging/export in energy flow; per-tab sessions; restore after refresh; clear error messages; no nested buttons; chart numbering | Done |
 | **M3.5 — Landing** | Lazy-loaded heavy visuals (first JS 884 → 247 KB); plain-language hero; readable CTA; GitHub links; accurate copy | Done |
+| **M3.6 — Legal & compliance pass** | Tariff wording "solar hours at least 20% cheaper; peak 10–20% costlier, set by each state; we assume 20%" everywhere; unsupported claims removed/softened; Open-Meteo attribution (CC BY 4.0) in landing + dashboard footers; Privacy & Disclaimer page with Credits & licences (`#/privacy`, `#/credits`); `THIRD_PARTY_NOTICES.md`; licence/credit headers kept in the build; labelled scenario select and days input; fonts self-hosted (no Google requests); unused template images removed | Done |
 | **Tests in place** | `test_safety_rules.py` (safety checks 0–5, carry-over, report, baseline, export), `test_allocation_parsing.py`, `test_sessions.py` — all offline; live scripts `test_graph.py`, `test_apply.py`, `test_forced_deviation.py`, `run_scenarios.py` | Done |
 
 ## 3. Remaining roadmap
@@ -48,7 +49,7 @@ Estimates are for one developer; tasks in the same milestone without a dependenc
 | 5.3 | Dashboard *Load saved results*: scenario menu → render state/chart/comparison from the file, badge "Saved run", no AI calls | FR-UI8 | 5.2 | 3 h |
 | 5.4 | Landing results strip — **component done** (reads `src/data/results-summary.json`, hidden while empty); fill by running 5.1 | FR-UI9 | 5.1 | 0.25 h |
 | 5.5 | Landing "What it manages", "Who it's for", PM Surya Ghar + ToD line, SIH footer — **Done** | UI/UX §4.1 | — | — |
-| 5.6 | Hash route `#/dashboard` so back button and shared links work | UI/UX §3 | — | 1 h |
+| 5.6 | Hash route `#/dashboard` so back button and shared links work (`#/privacy` and `#/credits` already use hash routes in `App.jsx`) | UI/UX §3 | — | 1 h |
 | 5.7 | Mobile header: "More" menu below 640 px — **Done** (also: FAQ, skip links, page titles, share image, dashboard loading state, simulation-complete banner, confirm before reset/re-simulate, results date) | UI/UX §10 | — | — |
 | 5.8 | Screen-reader text under the energy flow ("Solar 3.2 kW to load, battery charging 1.5 kW…") | UI/UX §11 | — | 0.5 h |
 
@@ -130,6 +131,9 @@ Rule: any bug fixed in `nodes/`, `baseline.py` or `main.py` gets a failing check
 - [ ] 390 px: no horizontal scroll; all controls reachable.
 - [ ] Keyboard only: every button reachable with visible focus; no nested buttons.
 - [ ] Reduced-motion on: no animated backgrounds or count-ups.
+- [ ] Network tab: no requests to Google or other third parties (only the site and the backend).
+- [ ] Footer links (Open-Meteo, Privacy & Disclaimer, Credits & licences) work on landing and dashboard; browser Back returns to the previous view.
+- [ ] Screen reader names the dashboard controls "Weather scenario" and "Days to simulate (1 to 7)".
 
 ## 7. Bug-fixing process
 

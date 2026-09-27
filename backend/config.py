@@ -21,7 +21,8 @@ EXPORT_CREDIT_RS_PER_KWH = 3.0   # ASSUMPTION: credit per exported kWh; varies b
 SOLAR_FORECAST_HOURS = 8         # how many hours of solar forecast the agent sees
 
 # --- Time-of-Day grid tariff (Electricity (Rights of Consumers) Amendment Rules, 2023:
-# solar hours at least 20% cheaper, peak hours at least 20% costlier than normal) ---
+# solar hours at least 20% cheaper than normal; peak hours 10-20% costlier, set by each
+# state; we assume 20%) ---
 BASE_TARIFF_RS_PER_KWH = 8.0
 TOD_MULTIPLIERS = [            # (start_hour, end_hour_exclusive, multiplier, label)
     (9, 17, 0.8, "solar hours"),

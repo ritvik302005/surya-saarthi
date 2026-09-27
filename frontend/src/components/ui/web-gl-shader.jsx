@@ -1,3 +1,5 @@
+/*! WebGL Shader by Ali Imam (https://21st.dev/@designali-in/components/web-gl-shader).
+ * Licence not stated by the author. Adapted for Surya Saarthi. */
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 

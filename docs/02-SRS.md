@@ -39,7 +39,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 | FR-S7 | Essential load (kW) shall follow the 24-value daily profile × U(0.9, 1.1). | Hour 19 value within 3.8 × [0.9, 1.1] | Done |
 | FR-S8 | A water-pump job (1.5 kW, deadline 10:00) shall arrive each hour 06–09; an EV job (3.0 kW, deadline 06:00) each hour 18–22. Job names include the start hour, e.g. `water_pump (07:00)`. | Hour 7 → one pump job named with 07:00 | Done |
 | FR-S9 | Jobs deferred last hour shall carry forward; a job with ≤ 1 hour to its deadline (modulo 24) shall be flagged `must_run`. | EV deferred at 22:00 → `must_run` false at 23:00, true at 05:00 | Done |
-| FR-S10 | Grid price shall be ₹8 × multiplier by hour: 09–16 ×0.8 ("solar hours"), 18–21 ×1.2 ("peak"), else ×1.0 ("normal"); `price_band` carries the label. | Hours 3/10/19 → 8.0/6.4/9.6 and normal/solar hours/peak | Done |
+| FR-S10 | Grid price shall be ₹8 × multiplier by hour: 09–16 ×0.8 ("solar hours"), 18–21 ×1.2 ("peak"), else ×1.0 ("normal"); `price_band` carries the label. (Solar hours are at least 20% cheaper; the peak surcharge is 10–20%, set by each state; we assume 20%.) | Hours 3/10/19 → 8.0/6.4/9.6 and normal/solar hours/peak | Done |
 | FR-S11 | Battery SOC shall start at `INITIAL_BATTERY_SOC_PCT` (60%) for a new session; capacity 10 kWh. | First `/cycle` after reset senses SOC 60 | Done |
 
 ### 3.2 AI allocation
@@ -191,6 +191,15 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 | NFR-S3 | CORS: allow all origins in MVP (public read-mostly demo); restrict to the deployed frontend origin in production. | Done / Planned |
 | NFR-S4 | Dependencies pinned (`requirements.txt`, `package-lock.json`). | Done |
 | NFR-S5 | Limit AI-backed calls per session (e.g. ≤ 200 cycles/hour) to protect API quota. | Planned |
+
+### Privacy and compliance
+| ID | Requirement | Status |
+|---|---|---|
+| NFR-P1 | No cookies, analytics or third-party requests from the browser; fonts and icons are served from the site. Only the random session id is stored (sessionStorage). | Done (verified: all browser requests go to the site or the backend) |
+| NFR-P2 | Only simulated numbers are sent to Groq; only the fixed site coordinates to Open-Meteo. | Done |
+| NFR-P3 | A Privacy & Disclaimer page (`#/privacy`) states what is stored, what is sent where, that it is a simulation not for real equipment, and no warranty; linked from both footers. | Done |
+| NFR-P4 | Open-Meteo attribution ("Weather data by Open-Meteo.com", CC BY 4.0) next to where its data appears (landing and dashboard footers); third-party credits on `#/credits` and in `THIRD_PARTY_NOTICES.md`; licence headers kept in the built JS. | Done |
+| NFR-P5 | Public claims match the sources: ToD solar hours at least 20% cheaper; peak 10–20% costlier, set by each state; we assume 20%. | Done |
 
 ### Performance
 | ID | Requirement | Status |

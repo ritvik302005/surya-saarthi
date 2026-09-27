@@ -105,7 +105,7 @@ export default function Landing({ onStart }) {
           {PRODUCT_NAME} · AI for solar microgrids
         </Badge>
         <h1 className="relative z-10 font-display font-semibold text-[clamp(2.2rem,5.5vw,4.2rem)] leading-[1.08] tracking-tight max-w-3xl mb-5">
-          The sun doesn't send an invoice.<br />Most microgrids waste it anyway.
+          The sun doesn't send an invoice.<br />Many microgrids waste it anyway.
         </h1>
         <p className="relative z-10 text-muted-foreground text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed max-w-xl mb-9">
           An AI agent that decides every hour whether to use solar, battery or grid power — storing
@@ -123,16 +123,16 @@ export default function Landing({ onStart }) {
       <section className="landing-section">
         <Reveal><span className="section-eyebrow">The problem</span></Reveal>
         <Reveal delay={80}>
-          <h2>Most rooftop and campus solar falls back to the grid the moment a cloud rolls in — not because there's no better option, but because nothing is watching closely enough to find one.</h2>
+          <h2>Many rooftop and campus solar systems fall back to the grid the moment a cloud rolls in — not because there's no better option, but because nothing is watching closely enough to find one.</h2>
         </Reveal>
         <Reveal delay={140} className="landing-text">
           <p>India's decentralized solar push — PM Surya Ghar Muft Bijli Yojana rooftops, campus
             microgrids, community batteries — is growing fast on hardware. The software controlling it
-            is mostly still a fixed threshold: pull from grid below a fixed battery percentage, no
+            is often still a fixed threshold: pull from grid below a fixed battery percentage, no
             matter what the weather is about to do, no matter what's actually plugged in.</p>
           <p>And since the 2023 Time-of-Day tariff rules, <em>when</em> you use power matters: at least
-            20% cheaper during solar hours, at least 20% costlier at the evening peak. A fixed rule can't
-            take advantage of that. {PRODUCT_NAME} can.</p>
+            20% cheaper during solar hours, and 10–20% costlier at the evening peak (set by each
+            state; we assume 20%). A fixed rule can't take advantage of that. {PRODUCT_NAME} can.</p>
         </Reveal>
       </section>
 
@@ -186,8 +186,7 @@ export default function Landing({ onStart }) {
             solar against battery against grid, and for explaining its own reasoning in plain
             language. But it never gets the final word on safety. A fixed, deterministic rule
             checks every decision afterward and corrects it if the battery would drop below reserve
-            or a load would go unmet — the same reasoning-plus-hard-limits pattern used for
-            safety-critical routing in hospitals and emergency systems.</p>
+            or a load would go unmet. The model suggests; the rules decide.</p>
         </Reveal>
       </section>
 
@@ -220,7 +219,13 @@ export default function Landing({ onStart }) {
         <span className="block font-display text-sm text-foreground">{PRODUCT_NAME}</span>
         <span className="block mt-1">{TAGLINE}</span>
         <span className="block mt-3">Smart India Hackathon 2026 · {SIH_PS_ID} · {SIH_PS_TITLE}{TEAM_NAME ? ` · Team ${TEAM_NAME}` : ''}</span>
-        <span className="block mt-2">SDG 7 · Affordable &amp; Clean Energy · <a href={REPO_URL} target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Source on GitHub</a></span>
+        <span className="block mt-2">SDG 7 · Affordable &amp; Clean Energy</span>
+        <nav className="footer-links" aria-label="Footer">
+          <a href="https://open-meteo.com/" target="_blank" rel="noreferrer">Weather data by Open-Meteo.com</a>
+          <a href={REPO_URL} target="_blank" rel="noreferrer">Source on GitHub</a>
+          <a href="#/privacy">Privacy &amp; Disclaimer</a>
+          <a href="#/credits">Credits &amp; licences</a>
+        </nav>
       </footer>
     </div>
   )
