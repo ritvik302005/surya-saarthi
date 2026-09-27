@@ -43,7 +43,7 @@ PVWatts-style: 14% system losses, −0.4%/°C above 25 °C cell temperature (NOC
 
 ### What-if
 
-`POST /whatif` replays the next 24 hours from the session's current moment with changed conditions — less sun, a power cut, battery health, peak tariff, extra load, a DISCOM grid limit — for the optimizer (now vs what-if) and the fixed rule, on the same seed, with no AI calls ([backend/whatif.py](backend/whatif.py)). Costs are compared with the battery charge left at the end counted.
+`POST /whatif` replays the next 24 hours from the session's current moment with changed conditions — less sun, a power cut, battery health, peak tariff, extra load, a DISCOM grid limit — for the optimizer (now vs what-if) and the fixed rule, on the same seed, with no AI calls ([backend/whatif.py](backend/whatif.py)). Costs are compared with the change in battery charge over the 24 hours counted, the same rule as the benchmark.
 
 ### 24-hour plan for a site controller
 

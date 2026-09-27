@@ -7,6 +7,7 @@ class GridState(TypedDict, total=False):
     scenario: str            # weather scenario key, see config.WEATHER_SCENARIOS
     controller: str          # "optimizer", "ai" or "fixed" (see nodes/decide.py)
     weather_source: Optional[str]   # name of recorded weather (benchmarks); None = live feed
+    weather_version: Optional[int]  # live weather download this run uses (see nodes/sensing.py)
     solar_kw: float
     air_temp_c: float
     battery_soc_pct: float

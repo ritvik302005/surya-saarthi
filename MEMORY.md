@@ -1,6 +1,6 @@
 # Surya Saarthi v2 — project memory (read this first in a new chat)
 
-Last updated: 27 Sep 2026. Keep this file current at the end of every working session.
+Last updated: 28 Sep 2026. Keep this file current at the end of every working session.
 
 ## What this is
 - **Surya Saarthi** ("charioteer of the sun"), team **BOOMERS**, Smart India Hackathon 2026, PS **SIH26200** (AICTE, Renewable/Sustainable Energy, Software).
@@ -16,6 +16,7 @@ Last updated: 27 Sep 2026. Keep this file current at the end of every working se
 Live site (still v1, deploys from `main` of the GitHub repo): frontend https://microgrid-agent.vercel.app, backend https://microgrid-agent.onrender.com.
 
 ## v2 commits (newest first)
+- (28 Sep) fixes from the project check: DR limits reach the AI + alert, what-if 400 + fair adjusted cost, 400/404 codes, per-run weather version, log cap, `#/dashboard` route
 - `3a74778` 3D energy scene; landing no longer blank without WebGL
 - `9558ba0` benchmark on recorded weather, operator notes, what-if, DR, signed device plan, v2 dashboard
 - `4af9347` physics, power cuts + genset, software BMS, 24 h optimizer, EN/HI explanations
@@ -49,6 +50,7 @@ Free tier ~8k tokens/min and ~200k tokens/day (~1k tokens per AI hour). Optimize
 3. Real prices → rerun benchmark.
 4. Not built: ESP32 testbed + digital-twin sync, ESMI outage data, cell-level BMS/Kalman/BLAST-Lite, LLM-phrased explanations + checker, logins on control endpoints, 400/404 codes (FR-API4), multi-site, attack detection, stakeholder interviews.
 5. The no-WebGL blank-landing bug is fixed in v2 but **still present in the SIH repo/live site** — ask before fixing there.
+6. Project check on 28 Sep, fixed the same day (benchmark rerun afterwards: all 32 non-AI rows identical, numbers still valid). Still open: should safety **force** a demand-response limit (e.g. start the genset) or only report it (current: AI told + "Demand response" alert, not forced)? 6 old print-only `test_*.py` scripts (keep or delete?). Genset idle fuel not modelled (noted in `config.py`). `.claude/launch.json` (backend :8000, frontend preview :4173) left uncommitted.
 
 ## Background (SIH version history and assets)
 - Team BOOMERS also built **KAVACH / SENTINEL** (border-surveillance AI + ESP32 alert layer) for SIH 2026 — ESP32 experience is useful for a v2 testbed.

@@ -32,6 +32,8 @@ def check(changes):
     for key in ("outage", "dr"):
         window = changes.get(key)
         if window:
+            if window.get("start") is None or window.get("end") is None:
+                raise ValueError(f"{key} needs both a start and an end hour")
             s, e = int(window["start"]), int(window["end"])
             if not (0 <= s <= 23 and 0 <= e <= 23 and 1 <= (e - s) % 24 <= 12):
                 raise ValueError(f"{key} must be hours of day 0-23 lasting 1-12 hours")
@@ -62,6 +64,7 @@ def _apply(state, changes, now):
 
 def _run(start_state, controller, now):
     state = {**copy.deepcopy(start_state), "controller": controller, "ai_blocked_reason": None}
+    start_kwh = (state["battery_soc_pct"] / 100 * config.BATTERY_CAPACITY_KWH * state.get("battery_soh", 1.0))
     hourly, totals = [], dict(cost_rs=0.0, grid_kwh=0.0, diesel_l=0.0, unserved_kwh=0.0, export_kwh=0.0)
     for h in range(now, now + HOURS):
         state["sim_hour"] = h
@@ -76,10 +79,10 @@ def _run(start_state, controller, now):
         totals["diesel_l"] += r["diesel_l"]
         totals["unserved_kwh"] += d["unserved_kw"]
         totals["export_kwh"] += d["grid_export_kw"]
-    # Fair comparison: energy left in the battery at the end is worth something, so the
-    # adjusted cost subtracts its value (same rule as the benchmark).
-    stored_kwh = hourly[-1]["soc_pct"] / 100 * state["battery_capacity_kwh"]
-    totals["adjusted_cost_rs"] = totals["cost_rs"] - stored_kwh * terminal_value_rs_per_kwh()
+    # Fair comparison: energy added to (or taken from) the battery over the 24 hours is worth
+    # something, so the adjusted cost subtracts the value of the change (same rule as the benchmark).
+    end_kwh = hourly[-1]["soc_pct"] / 100 * state["battery_capacity_kwh"]
+    totals["adjusted_cost_rs"] = totals["cost_rs"] - (end_kwh - start_kwh) * terminal_value_rs_per_kwh()
     totals = {k: round(v, 2) for k, v in totals.items()}
     totals["min_soc_pct"] = round(min(x["soc_pct"] for x in hourly), 1)
     totals["end_soc_pct"] = round(hourly[-1]["soc_pct"], 1)

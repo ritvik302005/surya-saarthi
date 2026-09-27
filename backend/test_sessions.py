@@ -6,9 +6,12 @@ Run from backend with: python test_sessions.py
 from fastapi.testclient import TestClient
 
 import main
+import nodes.sensing as sensing
 
 
 import config
+
+sensing.download_weather = lambda: (sensing._simulate_clear_sky_curve(), None)   # offline
 
 
 def fake_graph_invoke(state):
@@ -58,7 +61,8 @@ assert client.post("/simulate", json={"scenario": "sunny", "days": 1, "seed": 5}
 # Controller: optimizer by default; can be switched; unknown names are rejected
 assert client.post("/reset", headers=A).json()["controller"] == "optimizer"
 assert client.post("/controller", json={"controller": "ai"}, headers=A).json()["controller"] == "ai"
-assert "error" in client.post("/controller", json={"controller": "magic"}, headers=A).json()
+bad = client.post("/controller", json={"controller": "magic"}, headers=A)
+assert bad.status_code == 400 and "error" in bad.json(), bad.text
 client.post("/cycle", headers=A)
 assert client.get("/history", headers=A).json()["cycles"][-1]["controller"] == "ai"
 
@@ -93,4 +97,24 @@ assert "Too many requests" in client.post("/cycle", headers=F).json()["error"]
 assert client.post("/cycle", headers={"X-Session-Id": "calm-g"}).status_code == 200   # other sessions unaffected
 config.REQUESTS_PER_MINUTE_PER_SESSION = None
 
-print("Session isolation, seed, AI-budget and rate-limit checks passed.")
+# Status codes (SRS FR-API4): bad input is 400, downloads from an empty session are 404; the body keeps "error"
+E = {"X-Session-Id": "codes-e"}
+for path, body in (("/simulate", {"days": 0}), ("/simulate", {"days": 8}), ("/simulate", {"scenario": "hail"}),
+                   ("/simulate", {"controller": "magic"}), ("/reset", {"scenario": "hail"}), ("/reset", {"controller": "magic"})):
+    r = client.post(path, json=body, headers=E)
+    assert r.status_code == 400 and "error" in r.json(), (path, body, r.status_code, r.text)
+for path in ("/history/csv?session=empty-h", "/history/download?session=empty-h"):
+    r = client.get(path)
+    assert r.status_code == 404 and "error" in r.json(), (path, r.status_code, r.text)
+
+# Each run keeps the weather download it started with, even after newer weather is downloaded
+config.REQUESTS_PER_MINUTE_PER_SESSION = None
+W1, W2 = {"X-Session-Id": "weather-1"}, {"X-Session-Id": "weather-2"}
+client.post("/reset", headers=W1)
+v1 = main.get_session("weather-1").weather_version
+sensing._latest_fetched_at -= sensing.IRRADIANCE_MAX_AGE_S + 1          # pretend the download is old
+client.post("/reset", headers=W2)                                        # another viewer's run downloads again
+assert main.get_session("weather-2").weather_version == v1 + 1
+assert main.get_session("weather-1").run_inputs()["weather_version"] == v1   # the first run is unaffected
+
+print("Session isolation, seed, AI-budget, rate-limit, status-code and weather-version checks passed.")

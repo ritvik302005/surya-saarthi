@@ -1,6 +1,8 @@
 import math
 import random
+import threading
 import time
+from collections import OrderedDict
 
 import requests
 
@@ -8,12 +10,17 @@ import config
 import physics
 from bms import bms_limits
 
-# Fetched once and cached, rather than hitting the API on every single /cycle
-# call. Indexed by a simulated hour counter, not the wall clock.
-_irradiance_cache = None
-_temperature_cache = None
-_irradiance_fetched_at = 0.0
+# Live weather is downloaded once and cached, rather than hitting the API on every
+# /cycle call; it is indexed by the simulated hour, not the wall clock. Each download
+# is a numbered version, and a run keeps the version it started with, so another
+# viewer starting a run (which may download fresh weather) never shifts a run that
+# is already going.
 IRRADIANCE_MAX_AGE_S = 6 * 3600
+MAX_WEATHER_VERSIONS = 8          # older downloads are dropped; a run that old uses the newest
+_weather_versions = OrderedDict()  # version -> (irradiance W/m2 list, air temperature list or None)
+_latest_version = 0
+_latest_fetched_at = 0.0
+_weather_lock = threading.Lock()
 
 # Recorded weather for benchmarks: name -> {"actual_ghi", "actual_temp", "forecast_ghi",
 # "forecast_temp"} hourly lists (index = sim_hour). "forecast_*" is the day-ahead forecast
@@ -49,15 +56,9 @@ def _simulate_clear_sky_curve(hours=192):
     return series
 
 
-def fetch_hourly_irradiance():
-    """Returns a cached list of hourly shortwave_radiation values (W/m^2)
-    covering 8 days (and caches the matching air temperatures), so /simulate
-    can run up to a week without re-fetching on every cycle."""
-    global _irradiance_cache, _temperature_cache, _irradiance_fetched_at
-    if _irradiance_cache is not None:
-        return _irradiance_cache
-    _irradiance_fetched_at = time.time()
-
+def download_weather():
+    """(hourly shortwave_radiation W/m^2, hourly air temperature or None) for 8 days,
+    so /simulate can run up to a week from one download."""
     try:
         url = "https://api.open-meteo.com/v1/forecast"
         params = {
@@ -70,18 +71,39 @@ def fetch_hourly_irradiance():
         series = hourly["shortwave_radiation"]
         if not series:
             raise ValueError("empty irradiance series in API response")
-        _irradiance_cache = series
-        _temperature_cache = hourly.get("temperature_2m") or None
+        return series, hourly.get("temperature_2m") or None
     except Exception as e:
         print(f"[sensing] Live Open-Meteo fetch failed ({e}), using a simulated clear-sky curve instead.")
-        _irradiance_cache = _simulate_clear_sky_curve()
-        _temperature_cache = None
-
-    return _irradiance_cache
+        return _simulate_clear_sky_curve(), None
 
 
-def hourly_air_temp(sim_hour):
-    temps = _temperature_cache
+def current_weather_version():
+    """Called when a run starts: downloads the weather again if the last download is more
+    than IRRADIANCE_MAX_AGE_S old, and returns the version the run should keep using."""
+    global _latest_version, _latest_fetched_at
+    with _weather_lock:
+        if not _weather_versions or time.time() - _latest_fetched_at > IRRADIANCE_MAX_AGE_S:
+            data = download_weather()
+            _latest_version += 1
+            _latest_fetched_at = time.time()
+            _weather_versions[_latest_version] = data
+            while len(_weather_versions) > MAX_WEATHER_VERSIONS:
+                _weather_versions.popitem(last=False)
+        return _latest_version
+
+
+def _live_weather(version):
+    data = _weather_versions.get(version)
+    return data if data is not None else _weather_versions[current_weather_version()]
+
+
+def fetch_hourly_irradiance(version=None):
+    """Hourly irradiance of a weather version (the newest if None or no longer kept)."""
+    return _live_weather(version)[0]
+
+
+def hourly_air_temp(sim_hour, version=None):
+    temps = _live_weather(version)[1]
     if temps:
         value = temps[sim_hour % len(temps)]
         if value is not None:
@@ -97,15 +119,6 @@ def hour_rng(seed, sim_hour):
 
 def cloud_noise(variability, rng=random):
     return min(1.25, max(0.1, rng.gauss(1.0, variability)))
-
-
-def refresh_irradiance_if_stale():
-    """Called when a run starts: a long-running server re-fetches the forecast
-    every few hours instead of reusing the first day's data forever. Not called
-    mid-run, so hour indexes stay stable within a run."""
-    global _irradiance_cache
-    if _irradiance_cache is not None and time.time() - _irradiance_fetched_at > IRRADIANCE_MAX_AGE_S:
-        _irradiance_cache = None
 
 
 def simulate_demand(sim_hour, rng=random):
@@ -143,6 +156,12 @@ def in_outage(outages, sim_hour):
     return any(start <= sim_hour < end for start, end in outages or [])
 
 
+def dr_cap_kw(dr_events, sim_hour):
+    """Grid-import limit asked for this hour by demand response (the lowest if several), or None."""
+    caps = [e["max_grid_kw"] for e in dr_events or [] if e["start"] <= sim_hour < e["end"]]
+    return min(caps) if caps else None
+
+
 def _weather(state, sim_hour, scenario, rng):
     """(actual solar kW, air temp, raw forecast for the next hours) from recorded or live weather."""
     horizon = config.PLAN_HORIZON_HOURS - 1
@@ -158,11 +177,12 @@ def _weather(state, sim_hour, scenario, rng):
         return solar_kw, air, forecast
     # Live feed: the forecast is the weather API scaled for the scenario; the actual is that
     # forecast with passing-cloud noise, so the forecast can be wrong.
-    series = fetch_hourly_irradiance()
+    version = state.get("weather_version")
+    series = fetch_hourly_irradiance(version)
     multiplier = scenario["multiplier"] * scale
-    air = hourly_air_temp(sim_hour)
+    air = hourly_air_temp(sim_hour, version)
     actual_ghi = series[sim_hour % len(series)] * multiplier * cloud_noise(scenario["variability"], rng)
-    forecast = [physics.pv_ac_kw(series[(sim_hour + k) % len(series)] * multiplier, hourly_air_temp(sim_hour + k))
+    forecast = [physics.pv_ac_kw(series[(sim_hour + k) % len(series)] * multiplier, hourly_air_temp(sim_hour + k, version))
                 for k in range(1, horizon + 1)]
     return physics.pv_ac_kw(actual_ghi, air), air, forecast
 

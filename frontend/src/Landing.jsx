@@ -91,10 +91,12 @@ export default function Landing({ onStart }) {
   const reducedMotion = usePrefersReducedMotion()
   const [webgl] = useState(hasWebGL)   // the hero background needs WebGL; without it, skip it
   useEffect(() => { document.title = `${PRODUCT_NAME} — AI for solar microgrids` }, [])
+  // A normal #anchor would change the route, so skip-to-content moves focus directly.
+  const skipToContent = (e) => { e.preventDefault(); document.getElementById('content')?.focus() }
 
   return (
     <div className="min-h-screen animate-in fade-in duration-500">
-      <a href="#content" className="skip-link">Skip to content</a>
+      <a href="#content" onClick={skipToContent} className="skip-link">Skip to content</a>
       <nav className="sticky top-0 z-20 flex items-center justify-between px-6 sm:px-14 py-5 border-b border-border bg-background/85 backdrop-blur-sm">
         <span className="flex items-center gap-2.5 font-display font-semibold">
           <span className="h-2 w-2 rounded-full bg-battery" />

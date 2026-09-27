@@ -56,9 +56,9 @@ Estimates are for one developer; tasks in the same milestone without a dependenc
 | 5.3 | Dashboard *Load saved results*: scenario menu → render state/chart/comparison from the file, badge "Saved run", no AI calls | FR-UI8 | 5.2 | 3 h |
 | 5.4 | Landing results strip — **component done** (reads `src/data/results-summary.json`, hidden while empty); fill by running 5.1 | FR-UI9 | 5.1 | 0.25 h |
 | 5.5 | Landing "What it manages", "Who it's for", PM Surya Ghar + ToD line, SIH footer — **Done** | UI/UX §4.1 | — | — |
-| 5.6 | Hash route `#/dashboard` so back button and shared links work (`#/privacy` and `#/credits` already use hash routes in `App.jsx`) | UI/UX §3 | — | 1 h |
+| 5.6 | Hash route `#/dashboard` so back button and shared links work — **Done in v2** (28 Sep; skip links now move focus instead of changing the hash) | UI/UX §3 | — | — |
 | 5.7 | Mobile header: "More" menu below 640 px — **Done** (also: FAQ, skip links, page titles, share image, dashboard loading state, simulation-complete banner, confirm before reset/re-simulate, results date) | UI/UX §10 | — | — |
-| 5.8 | Screen-reader text under the energy flow ("Solar 3.2 kW to load, battery charging 1.5 kW…") | UI/UX §11 | — | 0.5 h |
+| 5.8 | Screen-reader text under the energy flow ("Solar 3.2 kW to load, battery charging 1.5 kW…") — **Done** (`aria-label` summary in `EnergyView.jsx`) | UI/UX §11 | — | — |
 
 ### M6 — Release · ~0.5 day
 | # | Task | Depends on | Est. |

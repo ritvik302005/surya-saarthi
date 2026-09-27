@@ -6,6 +6,7 @@ import time
 from numbers import Real
 
 import config
+from nodes.sensing import dr_cap_kw
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
 
@@ -37,6 +38,9 @@ Rules:
 - Power cuts: when the grid is down, only essential load runs, from solar, battery and a
   diesel genset (expensive: about Rs {config.GENSET_RS_PER_KWH:.0f}/kWh). Before a scheduled power cut, keep
   enough battery charge to carry the essential load through it.
+- Demand response: when the grid operator asks to limit grid import for some hours, keep
+  grid_used_kw at or below that limit in those hours: save battery charge for them and defer
+  flexible loads (unless must_run). Essential load must still be served.
 - Taking energy out of the battery wears it (about Rs {config.BATTERY_WEAR_RS_PER_KWH:.2f} per kWh), and about
   {100 - config.BATTERY_ROUND_TRIP_EFFICIENCY * 100:.0f}% of stored energy is lost to efficiency.
 
@@ -179,6 +183,9 @@ def plan_allocation_node(state):
     cuts = [f"{s % 24:02d}:00-{e % 24:02d}:00" for s, e in state.get("outages", []) if e > sim_hour and s < sim_hour + 24]
     targets = [f"at least {t['min_pct']:.0f}% by {t['hour'] % 24:02d}:00" for t in state.get("soc_targets", [])
                if sim_hour <= t["hour"] < sim_hour + 24]
+    dr_limits = [f"{e['start'] % 24:02d}:00-{e['end'] % 24:02d}:00 at most {e['max_grid_kw']:.1f} kW"
+                 for e in state.get("dr_events", []) if e["end"] > sim_hour and e["start"] < sim_hour + 24]
+    cap_now = dr_cap_kw(state.get("dr_events"), sim_hour)
     bms = state.get("bms") or {}
     human_prompt = f"""
 Weather scenario: {state.get('scenario', 'normal')}
@@ -194,6 +201,8 @@ Grid now: {"available" if state.get("grid_available", True) else "POWER CUT (gri
 Scheduled power cuts (next 24 h): {", ".join(cuts) or "none"}
 Battery limits now (BMS): charge up to {bms.get("max_charge_kw", config.BATTERY_MAX_CHARGE_KW)} kW, discharge up to {bms.get("max_discharge_kw", config.BATTERY_MAX_DISCHARGE_KW)} kW
 Operator battery targets: {", ".join(targets) or "none"}
+Grid import limits (demand response, next 24 h): {", ".join(dr_limits) or "none"}
+Grid import limit now: {f"{cap_now:.1f} kW" if cap_now is not None else "none"}
 """
     if state.get("replanned"):
         human_prompt += (

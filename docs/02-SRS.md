@@ -122,7 +122,7 @@ No user accounts. Isolation is by session id.
 | FR-API1 | Session id from `X-Session-Id` or `?session=`; sanitised `[A-Za-z0-9_-]`, ≤ 64 chars; empty → `default`. At most 100 sessions (LRU); one lock per session. | `test_sessions.py` | Done |
 | FR-API2 | Seeds: `/reset` and `/simulate` accept `seed`; otherwise random; stored per hour and in the CSV. | `test_sessions.py` | Done |
 | FR-API3 | Endpoints as in [03-Architecture §5](03-Architecture.md#5-api). | Tests | Done |
-| FR-API4 | Invalid `/simulate` scenario or days, and empty CSV/log downloads, shall return 400/404 (currently 200 with an error body). | — | **Planned** |
+| FR-API4 | Invalid `/simulate` or `/reset` scenario, days or controller, and an unknown `/controller`, return 400; empty CSV/log downloads return 404; the body stays `{"error": …}`. | `test_sessions.py` | Done |
 
 ### 3.9 Frontend
 
@@ -166,7 +166,7 @@ In memory only (sessions, history, constraints). Server log in `backend/logs/`. 
 
 | Input | Rule | On failure |
 |---|---|---|
-| `scenario` | Key of `WEATHER_SCENARIOS` | Error body (FR-API4: should be 400) |
+| `scenario` | Key of `WEATHER_SCENARIOS` | 400 |
 | `days` | 1–7 | Error body |
 | `controller` | optimizer / ai / fixed | Error body |
 | Note text / actions | FR-N1, FR-N2 | 400 |
@@ -230,4 +230,4 @@ In memory only (sessions, history, constraints). Server log in `backend/logs/`. 
 1. All `Done` requirements pass their tests; the six offline test files pass with no network.
 2. The benchmark shows 0 safety overrides of optimizer plans and 0 unserved essential load.
 3. `npm run build` succeeds; the browser checks pass on desktop and 390 px.
-4. `Planned` items (FR-API4, AUTH5) are implemented or explicitly deferred in the roadmap.
+4. `Planned` items (AUTH5) are implemented or explicitly deferred in the roadmap.

@@ -87,7 +87,7 @@ Privacy & Disclaimer (#/privacy; #/credits scrolls to Credits & licences)
 | Explanation | Quote in the chosen language (Hindi only in optimizer mode; note otherwise); forecast-missed badge | |
 | Cards | **Battery**: gauge + health, temperature, charge/discharge limits · **Safety and power-cut events** · **Session impact** (₹ saved vs no solar or battery; CO₂) | |
 | Operator panel | Note input + examples → interpretation (EN/HI, "Read by the AI / rule-based parser") → Apply / Cancel; active constraints with Clear; BMS test buttons (overheating, lost sensor, clear) | Nothing applies until confirmed |
-| What-if panel | Sun %, battery health %, evening peak price, extra load, power cut (from/to), DISCOM limit (from/to/max) → table Now / What-if (optimizer) / What-if (fixed rule) × cost (battery charge left counted), grid, diesel, unserved, lowest battery; battery-level chart | No AI calls |
+| What-if panel | Sun %, battery health %, evening peak price, extra load, power cut (from/to), DISCOM limit (from/to/max) → table Now / What-if (optimizer) / What-if (fixed rule) × cost (change in battery charge counted), grid, diesel, unserved, lowest battery; battery-level chart | No AI calls |
 | Comparison | Grid bars; % less grid, ₹ saved vs fixed rule (incl. wear, diesel), renewable share, overrides / AI fallback; solar row; power-cut hours, diesel, unserved, battery wear; CSV | |
 | History | Chart (last 20 hours) and modal log | |
 

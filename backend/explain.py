@@ -3,6 +3,7 @@
 Every sentence is filled in from the plan's own numbers (no LLM), so the explanation
 can't claim anything the plan doesn't do.
 """
+import config
 
 
 def _hh(hour):
@@ -30,7 +31,7 @@ def build_facts(state, plan, decision):
     facts = {
         "hour": start,
         "battery_pct": state.get("battery_soc_pct", 0),
-        "battery_above_reserve": state.get("battery_soc_pct", 0) > state.get("reserve_pct", 20.0) + 2,
+        "battery_above_reserve": state.get("battery_soc_pct", 0) > config.BATTERY_RESERVE_PCT + 2,
         "grid_ok": grid_ok[0],
         "price_now": prices[0],
         "charge_kw": round(h["sc"][0] + h["gc"][0], 2),

@@ -25,7 +25,7 @@ TOL = 0.05
 # layer has real work to do every hour and night/day both get exercised.
 STUB = {"solar_used_kw": 0.0, "battery_used_kw": 3.0, "grid_used_kw": 0.0, "defer_loads": [], "reasoning": "stub"}
 allocation._invoke_with_retry = lambda messages: SimpleNamespace(content=json.dumps(STUB))
-sensing.fetch_hourly_irradiance = lambda: sensing._simulate_clear_sky_curve()
+sensing.download_weather = lambda: (sensing._simulate_clear_sky_curve(), None)
 config.AI_HOURS_PER_DAY = config.AI_HOURS_PER_SESSION_PER_DAY = None
 
 

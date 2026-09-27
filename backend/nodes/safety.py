@@ -3,11 +3,13 @@
 
 Order: jobs -> solar serves load -> battery (within BMS and reserve limits) -> genset
 -> grid (or, in a power cut: more battery -> genset -> unserved) -> surplus charges
-the battery -> leftover solar is exported (or curtailed in a power cut).
+the battery -> leftover solar is exported (or curtailed in a power cut). Grid import
+above a demand-response limit is reported, not forced down.
 """
 import physics
 from bms import bms_limits
 from config import (GENSET_KW, GENSET_MIN_LOAD_FRACTION, GRID_EXPORT_LIMIT_KW)
+from nodes.sensing import dr_cap_kw
 
 TOLERANCE_KW = 0.01  # ignore rounding-level differences so overrides only fire on real violations
 
@@ -122,6 +124,13 @@ def enforce_safety_node(state):
     # --- Check 6: leftover solar is exported (net metering), or curtailed in a power cut ---
     solar_left = surplus_solar - solar_to_battery
     export = min(solar_left, GRID_EXPORT_LIMIT_KW) if grid_ok else 0.0
+
+    # --- Check 7: demand response. A DISCOM grid-import limit is a request, not a physical
+    # limit, so it is not forced (essentials stay powered); going over it is reported. ---
+    cap = dr_cap_kw(state.get("dr_events"), state.get("sim_hour", 0))
+    if cap is not None and grid_used > cap + TOLERANCE_KW:
+        alerts.append(f"Demand response: grid import {grid_used:.2f} kW is above the {cap:.1f} kW limit "
+                      f"asked for this hour.")
 
     battery_used = battery_out if battery_out > 0 else -charge
     decision.update({

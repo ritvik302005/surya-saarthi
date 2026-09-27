@@ -27,7 +27,7 @@ from bms import FAULTS as BMS_FAULTS
 from graph import graph
 from nodes.decide import CONTROLLERS
 from nodes.optimize import optimizer_node
-from nodes.sensing import read_and_forecast_node, refresh_irradiance_if_stale
+from nodes.sensing import current_weather_version, read_and_forecast_node
 
 app = FastAPI(title="Surya Saarthi API")
 
@@ -44,6 +44,7 @@ app.add_middleware(
 
 LOG_DIR = "logs"
 LOG_PATH = os.path.join(LOG_DIR, "surya_saarthi_log.txt")
+LOG_MAX_BYTES = 5_000_000
 os.makedirs(LOG_DIR, exist_ok=True)
 
 MAX_SESSIONS = 100   # oldest idle sessions are dropped beyond this
@@ -88,7 +89,9 @@ class Session:
 
     def reset(self, scenario=None, seed=None, controller=None, keep_constraints=False):
         # keeps self.lock: reset runs while the lock is held
-        refresh_irradiance_if_stale()
+        # Weather is downloaded again if it's more than a few hours old; this run keeps
+        # its version even if another session downloads newer weather later.
+        self.weather_version = current_weather_version()
         self.scenario = scenario or self.scenario
         self.controller = controller or self.controller
         # Clouds and demand noise come from this seed, so a run can be repeated exactly
@@ -116,6 +119,7 @@ class Session:
     def run_inputs(self):
         """Inputs that both the chosen controller and the baseline see each hour."""
         return {"sim_hour": self.sim_hour, "scenario": self.scenario, "seed": self.seed,
+                "weather_version": self.weather_version,
                 "outages": list(self.outages), "soc_targets": list(self.soc_targets),
                 "dr_events": list(self.dr_events), "bms_fault": self.bms_fault}
 
@@ -130,7 +134,11 @@ def get_session(session_id):
     keeps curl and the test scripts working."""
     key = re.sub(r"[^A-Za-z0-9_-]", "", session_id or "")[:64] or "default"
     with _sessions_lock:
-        session = _sessions.pop(key, None) or Session()
+        session = _sessions.get(key)
+    # A new session may download weather, so it's built outside the lock that every request uses.
+    new = Session() if session is None else None
+    with _sessions_lock:
+        session = _sessions.pop(key, None) or new
         _sessions[key] = session
         while len(_sessions) > MAX_SESSIONS:
             _sessions.popitem(last=False)
@@ -180,8 +188,12 @@ class ControllerOptions(BaseModel):
     controller: str
 
 
+def _bad_request(message, status_code=400):
+    return JSONResponse(status_code=status_code, content={"error": message})
+
+
 def _invalid_controller(controller):
-    return {"error": f"Unknown controller '{controller}'. Valid options: {list(CONTROLLERS)}"}
+    return _bad_request(f"Unknown controller '{controller}'. Valid options: {list(CONTROLLERS)}")
 
 
 def format_log_entry(entry):
@@ -202,6 +214,13 @@ def format_log_entry(entry):
 
 
 def log_cycle_to_file(entry):
+    # A long-running demo server would otherwise grow the log forever: past the limit,
+    # the current log becomes the one backup (replacing the older one) and a new log starts.
+    try:
+        if os.path.getsize(LOG_PATH) > LOG_MAX_BYTES:
+            os.replace(LOG_PATH, LOG_PATH + ".1")
+    except OSError:
+        pass   # no log yet, or another request just rotated it
     with open(LOG_PATH, "a", encoding="utf-8") as f:
         f.write(format_log_entry(entry))
 
@@ -320,7 +339,7 @@ def comparison_summary(cycle_history):
 
 
 def _invalid_scenario(scenario):
-    return {"error": f"Unknown scenario '{scenario}'. Valid options: {list(config.WEATHER_SCENARIOS.keys())}"}
+    return _bad_request(f"Unknown scenario '{scenario}'. Valid options: {list(config.WEATHER_SCENARIOS.keys())}")
 
 
 @app.get("/health")
@@ -359,7 +378,7 @@ def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None
     if options.scenario not in config.WEATHER_SCENARIOS:
         return _invalid_scenario(options.scenario)
     if options.days < 1 or options.days > 7:
-        return {"error": "days must be between 1 and 7"}
+        return _bad_request("days must be between 1 and 7")
     if options.controller and options.controller not in CONTROLLERS:
         return _invalid_controller(options.controller)
 
@@ -402,7 +421,7 @@ def download_log(x_session_id: Optional[str] = Header(None), session: Optional[s
     """This session's cycles as a readable text log."""
     history = session_from(x_session_id, session).history
     if not history:
-        return {"error": "No cycles yet — run at least one cycle first."}
+        return _bad_request("No cycles yet — run at least one cycle first.", 404)
     return PlainTextResponse("".join(format_log_entry(e) for e in history),
                              headers={"Content-Disposition": "attachment; filename=surya_saarthi_log.txt"})
 
@@ -412,7 +431,7 @@ def download_csv(x_session_id: Optional[str] = Header(None), session: Optional[s
     """Per-hour results (agent and rule-based side by side) for charts and reports."""
     history = session_from(x_session_id, session).history
     if not history:
-        return {"error": "No cycles yet — run a simulation first."}
+        return _bad_request("No cycles yet — run a simulation first.", 404)
     fields = ["cycle", "sim_hour", "scenario", "controller", "grid_available", "solar_available_kw", "solar_kw",
               "battery_kw", "grid_kw", "export_kw", "genset_kw", "diesel_l", "unserved_kw", "load_kw",
               "battery_soc_pct", "battery_soh_pct", "battery_wear_rs", "grid_price_rs", "agent_cost_rs",
@@ -569,8 +588,8 @@ def run_what_if(options: WhatIfOptions, x_session_id: Optional[str] = Header(Non
     with session.lock:
         try:
             return whatif.what_if(session.state, session.run_inputs(), options.model_dump(exclude_none=True))
-        except ValueError as error:
-            return JSONResponse(status_code=400, content={"error": str(error)})
+        except (ValueError, KeyError, TypeError) as error:
+            return _bad_request(f"Invalid what-if: {error}")
 
 
 # --- 24 h plan for an edge device (v2 Phase 3) ---

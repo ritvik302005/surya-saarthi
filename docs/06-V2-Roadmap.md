@@ -49,7 +49,7 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 | Software BMS | ✅ partly | Pack-level live limits, temperature derating/cut-off, health, fault injection (`bms.py`). **Not done:** cell-level model, Kalman-filter SOC, BLAST-Lite wear (simple throughput model instead) |
 | What-if panel | ✅ | Sun, power cut, battery health, peak tariff, extra load, DISCOM limit; no AI calls (`whatif.py`, `WhatIfPanel.jsx`) |
 | 3D energy scene | ✅ | three.js site (solar + sun, battery with charge bar, tower, genset, house, particle flows, labels); flat fallback; still under reduced motion (`EnergyScene3D.jsx`, `EnergyView.jsx`) |
-| Demand response | ✅ | Grid-import caps in the optimizer (notes or what-if); measured against the same day without the cap in what-if |
+| Demand response | ✅ | Grid-import caps in the optimizer (notes or what-if); measured against the same day without the cap in what-if. The AI is told the limits too; any hour over a limit (any controller) raises a "Demand response" alert. Safety does not force the limit down (open decision) |
 
 ### Phase 3 — Credibility and delivery ⬜ mostly open
 
@@ -78,7 +78,7 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 1. Real prices → rerun `python benchmark.py` (≈ 2 min; landing updates itself).
 2. Deck results slide + SIH submission text (title, description, abstract) from `docs/07`.
 3. Bigger AI sample (~5 more days, spread over days for the Groq quota).
-4. Outage likelihood from Prayas ESMI data; logins on control endpoints; 400/404 codes (SRS FR-API4).
+4. Outage likelihood from Prayas ESMI data; logins on control endpoints. (400/404 codes, SRS FR-API4: done 28 Sep.)
 5. ESP32 testbed + twin sync (team hardware).
 
 ## Do not claim

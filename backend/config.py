@@ -77,6 +77,8 @@ GENSET_KW = 5.0                  # ASSUMPTION: site genset rating
 GENSET_MIN_LOAD_FRACTION = 0.3   # common guidance: avoid running a diesel genset below ~30% load
 DIESEL_PRICE_RS_PER_L = 90.0     # ASSUMPTION: set your local diesel price
 GENSET_KWH_PER_L = 2.8           # ASSUMPTION: small genset at part load; use your genset's fuel curve
+# Fuel is modelled as proportional to output: the extra fuel a genset burns just by
+# running (idle / no-load consumption) is not included, so light-load hours are optimistic.
 GENSET_RS_PER_KWH = DIESEL_PRICE_RS_PER_L / GENSET_KWH_PER_L
 DIESEL_CO2_KG_PER_L = 2.68       # CO2 from burning one litre of diesel (standard combustion factor)
 # Optimizer penalty (not a price) for leaving essential load unserved. High enough that it

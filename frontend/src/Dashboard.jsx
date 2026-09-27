@@ -64,6 +64,8 @@ export default function Dashboard({ onBack }) {
   const [lang, setLang] = useState(() => { try { return localStorage.getItem('ss-lang') || 'en' } catch { return 'en' } })
 
   useEffect(() => { document.title = `Dashboard · ${PRODUCT_NAME}` }, [])
+  // A normal #anchor would change the route, so skip-to-content moves focus directly.
+  const skipToMain = (e) => { e.preventDefault(); document.getElementById('main')?.focus() }
 
   useEffect(() => {
     apiFetch('/scenarios')
@@ -260,7 +262,7 @@ export default function Dashboard({ onBack }) {
   return (
     <TooltipProvider delayDuration={200}>
       <div className="min-h-screen flex flex-col animate-in fade-in duration-500">
-        <a href="#main" className="skip-link">Skip to content</a>
+        <a href="#main" onClick={skipToMain} className="skip-link">Skip to content</a>
         <header className="sticky top-0 z-10 flex flex-wrap items-center justify-between gap-x-4 gap-y-2.5 px-4 sm:px-14 py-3 sm:py-5 border-b border-border bg-background/85 backdrop-blur-sm">
           <div className="flex items-center gap-2.5 font-display font-semibold tracking-tight">
             <span className={`h-2 w-2 rounded-full ${loading ? 'bg-solar animate-pulse' : state ? 'bg-battery' : 'bg-muted-foreground'}`} />

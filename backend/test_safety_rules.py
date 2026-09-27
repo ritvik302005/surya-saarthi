@@ -93,7 +93,7 @@ assert report["deferred_loads"] == [ev["name"]], report
 # 9b. The forecast check runs in sensing, before the decision, and belongs to one hour only
 import nodes.sensing as sensing
 from nodes.sensing import read_and_forecast_node
-sensing.fetch_hourly_irradiance = lambda: sensing._simulate_clear_sky_curve()   # offline
+sensing.download_weather = lambda: (sensing._simulate_clear_sky_curve(), None)   # offline
 fresh = read_and_forecast_node({"sim_hour": 12, "replanned": True, "seed": 7})
 assert fresh["replanned"] is False and fresh["forecast_miss_kw"] is None, fresh   # no earlier forecast yet
 missed = read_and_forecast_node({"sim_hour": 12, "forecast_solar_kw": 99.0, "seed": 7})

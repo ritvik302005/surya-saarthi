@@ -127,7 +127,7 @@ sequenceDiagram
 
 ## 5. API
 
-All endpoints accept optional `X-Session-Id`; downloads and `/plan` also accept `?session=`. Errors: `{"error": "message"}` (400 invalid input, 401 bad device key, 429 rate limit, 503 no plan).
+All endpoints accept optional `X-Session-Id`; downloads and `/plan` also accept `?session=`. Errors: `{"error": "message"}` (400 invalid input, 401 bad device key, 404 nothing to download yet, 429 rate limit, 503 no plan).
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
@@ -155,7 +155,7 @@ All endpoints accept optional `X-Session-Id`; downloads and `/plan` also accept 
 | Data | Where | Lifetime |
 |---|---|---|
 | Sessions, history, constraints | Process memory | Until restart / eviction |
-| Weather cache (live) | Process memory | Refreshed at run start if > 6 h old |
+| Weather cache (live) | Process memory | Downloaded again at run start if > 6 h old; each run keeps the download it started with (last 8 kept) |
 | Recorded weather | `backend/data/weather_delhi.json` | In git (CC BY 4.0) |
 | Benchmark results | `backend/sample_results/benchmark.json`, `frontend/src/data/results-summary.json` | In git |
 | Server log | `backend/logs/` | Append-only, git-ignored |

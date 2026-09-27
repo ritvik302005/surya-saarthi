@@ -13,7 +13,7 @@ const T = {
     sun: 'Sunshine', cut: 'Power cut', from: 'from', to: 'to', health: 'Battery health', peak: 'Evening peak price',
     extra: 'Extra essential load', dr: 'DISCOM grid limit', max: 'max',
     cols: ['Now (optimizer)', 'What-if (optimizer)', 'What-if (fixed rule)'],
-    rows: ['Cost for 24 h (battery charge left counted)', 'Grid power bought', 'Diesel used', 'Essential load not served', 'Lowest battery level'],
+    rows: ['Cost for 24 h (change in battery charge counted)', 'Grid power bought', 'Diesel used', 'Essential load not served', 'Lowest battery level'],
     chart: 'Battery level over the next 24 hours',
   },
   hi: {
@@ -22,7 +22,7 @@ const T = {
     sun: 'धूप', cut: 'बिजली कटौती', from: 'से', to: 'तक', health: 'बैटरी की सेहत', peak: 'शाम का पीक दाम',
     extra: 'अतिरिक्त ज़रूरी लोड', dr: 'DISCOM ग्रिड सीमा', max: 'अधिकतम',
     cols: ['अभी (ऑप्टिमाइज़र)', 'अगर (ऑप्टिमाइज़र)', 'अगर (तय नियम)'],
-    rows: ['24 घंटे का ख़र्च (बची बैटरी गिनी गई)', 'ग्रिड से ली बिजली', 'डीज़ल', 'ज़रूरी लोड जो नहीं चला', 'बैटरी का सबसे कम स्तर'],
+    rows: ['24 घंटे का ख़र्च (बैटरी चार्ज का बदलाव गिना गया)', 'ग्रिड से ली बिजली', 'डीज़ल', 'ज़रूरी लोड जो नहीं चला', 'बैटरी का सबसे कम स्तर'],
     chart: 'अगले 24 घंटे बैटरी का स्तर',
   },
 }
