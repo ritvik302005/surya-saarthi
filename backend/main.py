@@ -1,5 +1,8 @@
 import csv
+import hashlib
+import hmac
 import io
+import json
 import os
 import re
 import secrets
@@ -18,9 +21,13 @@ from pydantic import BaseModel
 load_dotenv()
 
 import config
+import notes
+import whatif
+from bms import FAULTS as BMS_FAULTS
 from graph import graph
 from nodes.decide import CONTROLLERS
-from nodes.sensing import refresh_irradiance_if_stale
+from nodes.optimize import optimizer_node
+from nodes.sensing import read_and_forecast_node, refresh_irradiance_if_stale
 
 app = FastAPI(title="Surya Saarthi API")
 
@@ -79,7 +86,7 @@ class Session:
         self.requests = RollingCounter(60)
         self.reset()
 
-    def reset(self, scenario=None, seed=None, controller=None):
+    def reset(self, scenario=None, seed=None, controller=None, keep_constraints=False):
         # keeps self.lock: reset runs while the lock is held
         refresh_irradiance_if_stale()
         self.scenario = scenario or self.scenario
@@ -89,10 +96,19 @@ class Session:
         self.seed = seed if seed is not None else secrets.randbelow(1_000_000)
         self.state = {}
         self.rule_state = {}          # the fixed-rule baseline runs through the same pipeline
-        self.outages = []             # [start, end) sim-hour power-cut windows for this run
-        self.soc_targets = []         # operator targets {"hour", "min_pct"}
-        self.dr_events = []           # demand response {"start", "end", "max_grid_kw"}
-        self.bms_fault = None         # injected BMS fault for testing
+        if keep_constraints and hasattr(self, "outages"):
+            # The new run starts at 00:00 on day 1: keep each constraint at the same time of day
+            # relative to today (e.g. "power cut today 19:00-22:00" stays 19:00-22:00 on day 1).
+            shift = self.sim_hour - self.sim_hour % 24
+            self.outages = [[s - shift, e - shift] for s, e in self.outages if e - shift > 0]
+            self.soc_targets = [{**t, "hour": t["hour"] - shift} for t in self.soc_targets if t["hour"] - shift > 0]
+            self.dr_events = [{**d, "start": d["start"] - shift, "end": d["end"] - shift}
+                              for d in self.dr_events if d["end"] - shift > 0]
+        else:
+            self.outages = []         # [start, end) sim-hour power-cut windows for this run
+            self.soc_targets = []     # operator targets {"hour", "min_pct"}
+            self.dr_events = []       # demand response {"start", "end", "max_grid_kw"}
+            self.bms_fault = None     # injected BMS fault for testing
         self.history = []
         self.cycle_counter = 0
         self.sim_hour = 0
@@ -150,6 +166,7 @@ class ResetOptions(BaseModel):
     scenario: Optional[str] = None
     seed: Optional[int] = None
     controller: Optional[str] = None
+    keep_constraints: bool = False   # carry power cuts/targets into the new run (same time of day)
 
 
 class SimulateOptions(BaseModel):
@@ -417,6 +434,7 @@ def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[s
     scenario = options.scenario if options else None
     seed = options.seed if options else None
     controller = options.controller if options else None
+    keep = options.keep_constraints if options else False
     if scenario and scenario not in config.WEATHER_SCENARIOS:
         return _invalid_scenario(scenario)
     if controller and controller not in CONTROLLERS:
@@ -425,7 +443,7 @@ def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[s
     if (limited := _rate_limited(session)):
         return limited
     with session.lock:
-        session.reset(scenario, seed, controller)
+        session.reset(scenario, seed, controller, keep_constraints=keep)
         return {"status": "reset", "scenario": session.scenario, "seed": session.seed, "controller": session.controller}
 
 
@@ -438,3 +456,152 @@ def set_controller(options: ControllerOptions, x_session_id: Optional[str] = Hea
     with session.lock:
         session.controller = options.controller
         return {"controller": session.controller}
+
+
+# --- Operator notes, constraints, BMS faults (v2 Phase 2) ---
+
+class NoteText(BaseModel):
+    text: str
+
+
+class NoteActions(BaseModel):
+    actions: list
+
+
+class ClearOptions(BaseModel):
+    kind: Optional[str] = None      # "outage", "soc_target", "dr" or None for all
+
+
+def _constraints(session):
+    return {"now_hour": session.sim_hour, "outages": session.outages, "soc_targets": session.soc_targets,
+            "dr_events": session.dr_events, "bms_fault": session.bms_fault}
+
+
+@app.post("/note/interpret")
+def interpret_note(note: NoteText, x_session_id: Optional[str] = Header(None)):
+    """Read an operator's note (Hindi/Hinglish/English) into checked actions. Changes nothing:
+    the operator confirms with /note/apply."""
+    session = session_from(x_session_id)
+    if (limited := _rate_limited(session)):
+        return limited
+    allow_ai = _ai_blocked_reason(session) is None
+    try:
+        result = notes.interpret(note.text, session.sim_hour, allow_ai=allow_ai)
+    except ValueError as error:
+        return JSONResponse(status_code=400, content={"error": str(error)})
+    if result["source"] == "ai":
+        session.ai_hours.add()
+        _ai_hours_all_sessions.add()
+    return result
+
+
+@app.post("/note/apply")
+def apply_note(body: NoteActions, x_session_id: Optional[str] = Header(None)):
+    session = session_from(x_session_id)
+    with session.lock:
+        try:
+            actions = notes.validate(body.actions, session.sim_hour)
+        except (ValueError, KeyError, TypeError) as error:
+            return JSONResponse(status_code=400, content={"error": f"Invalid action: {error}"})
+        for a in actions:
+            if a["type"] == "outage":
+                session.outages.append([a["start"], a["end"]])
+            elif a["type"] == "soc_target":
+                session.soc_targets.append({"hour": a["hour"], "min_pct": a["min_pct"]})
+            elif a["type"] == "dr":
+                session.dr_events.append({"start": a["start"], "end": a["end"], "max_grid_kw": a["max_grid_kw"]})
+        return _constraints(session)
+
+
+@app.get("/constraints")
+def get_constraints(x_session_id: Optional[str] = Header(None)):
+    return _constraints(session_from(x_session_id))
+
+
+@app.post("/constraints/clear")
+def clear_constraints(options: Optional[ClearOptions] = None, x_session_id: Optional[str] = Header(None)):
+    session = session_from(x_session_id)
+    kind = options.kind if options else None
+    with session.lock:
+        if kind in (None, "outage"):
+            session.outages = []
+        if kind in (None, "soc_target"):
+            session.soc_targets = []
+        if kind in (None, "dr"):
+            session.dr_events = []
+        if kind in (None, "bms_fault"):
+            session.bms_fault = None
+        return _constraints(session)
+
+
+class FaultOptions(BaseModel):
+    fault: Optional[str] = None     # "overtemp", "sensor_lost" or None to clear
+
+
+@app.post("/bms/fault")
+def inject_bms_fault(options: FaultOptions, x_session_id: Optional[str] = Header(None)):
+    """Inject a battery fault (testing/demo) to show the system backing off safely."""
+    if options.fault is not None and options.fault not in BMS_FAULTS:
+        return JSONResponse(status_code=400, content={"error": f"Unknown fault. Valid: {list(BMS_FAULTS)}"})
+    session = session_from(x_session_id)
+    with session.lock:
+        session.bms_fault = options.fault
+        return _constraints(session)
+
+
+# --- What-if (v2 Phase 2) ---
+
+class WhatIfOptions(BaseModel):
+    solar_scale: Optional[float] = None
+    battery_health_pct: Optional[float] = None
+    peak_multiplier: Optional[float] = None
+    extra_load_kw: Optional[float] = None
+    outage: Optional[dict] = None       # {"start": hour 0-23, "end": hour 0-23}
+    dr: Optional[dict] = None           # {"start", "end", "max_grid_kw"}
+
+
+@app.post("/whatif")
+def run_what_if(options: WhatIfOptions, x_session_id: Optional[str] = Header(None)):
+    """Next 24 hours under changed conditions vs now; optimizer and fixed rule; no AI calls."""
+    session = session_from(x_session_id)
+    if (limited := _rate_limited(session)):
+        return limited
+    with session.lock:
+        try:
+            return whatif.what_if(session.state, session.run_inputs(), options.model_dump(exclude_none=True))
+        except ValueError as error:
+            return JSONResponse(status_code=400, content={"error": str(error)})
+
+
+# --- 24 h plan for an edge device (v2 Phase 3) ---
+
+@app.get("/plan")
+def get_plan(x_session_id: Optional[str] = Header(None), session: Optional[str] = Query(None),
+             x_api_key: Optional[str] = Header(None)):
+    """The optimizer's schedule for the next 24 hours. A site controller caches it and
+    follows it (with its own safety rules) if the connection drops. Signed when
+    PLAN_SIGNING_KEY is set; requires X-Api-Key when DEVICE_API_KEY is set."""
+    if config.DEVICE_API_KEY and not hmac.compare_digest(x_api_key or "", config.DEVICE_API_KEY):
+        return JSONResponse(status_code=401, content={"error": "Missing or wrong X-Api-Key."})
+    s = session_from(x_session_id, session)
+    with s.lock:
+        state = read_and_forecast_node({**{k: v for k, v in s.state.items() if k not in ("decision", "report", "plan")},
+                                        **s.run_inputs()})
+        state = optimizer_node(state)
+    plan = state.get("plan")
+    if not plan:
+        return JSONResponse(status_code=503, content={"error": "No plan could be made; the device should use its fixed rule."})
+    h, start = plan["hourly"], plan["start_hour"]
+    schedule = [{"sim_hour": start + k, "hour": (start + k) % 24,
+                 "battery_kw": round(h["d"][k] - h["sc"][k] - h["gc"][k], 2), "grid_kw": h["g"][k],
+                 "genset_kw": round(h["gl"][k] + h["gc"][k], 2), "soc_pct": plan["soc_pct"][k],
+                 "grid_available": plan["grid_available"][k]} for k in range(len(h["d"]))]
+    payload = {"issued_at": datetime.now().isoformat(timespec="seconds"), "start_hour": start,
+               "schedule": schedule, "jobs": plan["job_hour"],
+               "fallback": "If the schedule is stale or its signature fails: solar, then battery above the reserve, then grid/genset."}
+    body = {"plan": payload}
+    if config.PLAN_SIGNING_KEY:
+        message = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+        body.update(algorithm="HMAC-SHA256",
+                    signature=hmac.new(config.PLAN_SIGNING_KEY.encode(), message, hashlib.sha256).hexdigest())
+    return body

@@ -8,6 +8,8 @@ Surya Saarthi uses the data, fonts, icons and code listed below. The same list, 
 |---|---|---|
 | Solar irradiance and forecast | [Weather data by Open-Meteo.com](https://open-meteo.com/) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Free API, for non-commercial use. Attribution is shown in the landing and dashboard footers. |
 | Grid CO₂ factor (0.71 kg/kWh) | CEA CO₂ Baseline Database for the Indian Power Sector, v21.0 | Published by the Central Electricity Authority, Government of India |
+| Recorded weather for the benchmark (`backend/data/weather_delhi.json`) | Open-Meteo Historical Weather API (ERA5 reanalysis) and Previous Runs API (day-ahead forecasts) | [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/), weather data by Open-Meteo.com |
+| Solar model defaults (14% system losses, 96% inverter efficiency) | NREL PVWatts default values | Published parameters, used as assumptions |
 
 ## AI model
 
@@ -65,6 +67,6 @@ By Ali Imam (https://21st.dev/@designali-in), published on 21st.dev for copy-and
 
 **Frontend:** React, React DOM, Tailwind CSS, tw-animate-css, shadcn/ui, Base UI, Radix UI (dialog, slot, tooltip, separator), three.js, simplex-noise, clsx, tailwind-merge: MIT. class-variance-authority: Apache-2.0. Vite, oxlint: MIT.
 
-**Backend:** FastAPI, Pydantic, LangGraph, LangChain Core, langchain-groq: MIT. Uvicorn, python-dotenv: BSD-3-Clause. groq (Python SDK), Requests: Apache-2.0.
+**Backend:** FastAPI, Pydantic, LangGraph, LangChain Core, langchain-groq: MIT. Uvicorn, python-dotenv: BSD-3-Clause. groq (Python SDK), Requests: Apache-2.0. SciPy: BSD-3-Clause (bundles the HiGHS linear/MILP solver, MIT). NumPy: BSD-3-Clause (with bundled components under 0BSD, MIT, Zlib, CC0-1.0).
 
 Each package's own licence file is in `frontend/node_modules/<package>/` or the installed Python package metadata.

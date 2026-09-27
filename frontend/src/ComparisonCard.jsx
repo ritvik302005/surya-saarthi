@@ -35,11 +35,12 @@ export default function ComparisonCard({ comparison, csvUrl }) {
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>
             <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal mb-1.5">
-              {PRODUCT_NAME} vs rule-based controller
+              {PRODUCT_NAME} vs fixed-rule controller
             </CardTitle>
             <CardDescription>
-              Same sunlight and demand, {c.hours} hour{c.hours !== 1 ? 's' : ''}. The rule-based controller uses solar,
-              then battery, then grid, exports any surplus, and never shifts a load.
+              Same sunlight, demand and power cuts, {c.hours} hour{c.hours !== 1 ? 's' : ''}, same safety and battery
+              limits. The fixed rule uses solar, then battery, then grid (genset in a cut), and never shifts a load.
+              Costs include battery wear and diesel.
             </CardDescription>
           </div>
           <a href={csvUrl} className="font-mono text-xs underline underline-offset-4 text-muted-foreground hover:text-foreground">
@@ -56,7 +57,9 @@ export default function ComparisonCard({ comparison, csvUrl }) {
           <Stat value={`${better ? '' : '+'}${Math.abs(c.grid_reduction_pct).toFixed(1)}%`}
                 label={better ? 'less grid power than rule-based' : 'more grid power than rule-based'}
                 tone={better ? 'text-battery' : 'text-grid'} />
-          <Stat value={`₹${c.extra_savings_rs.toFixed(2)}`} label="saved vs rule-based (ToD tariff)" />
+          <Stat value={`₹${c.extra_savings_rs.toFixed(2)}`}
+                label={c.extra_savings_rs >= 0 ? 'saved vs fixed rule (incl. wear, diesel)' : 'more than the fixed rule (incl. wear, diesel)'}
+                tone={c.extra_savings_rs >= 0 ? 'text-battery' : 'text-grid'} />
           <Stat value={`${c.renewable_share_pct.toFixed(1)}%`} label="demand met by solar + battery" />
           <Stat value={`${c.safety_override_hours} / ${c.ai_fallback_hours}`} label="hours with safety override / AI fallback" />
         </div>
@@ -67,6 +70,14 @@ export default function ComparisonCard({ comparison, csvUrl }) {
                 label={`used on site or stored (rules: ${(c.rule_solar_self_use_pct ?? 0).toFixed(1)}%)`} />
           <Stat value={`${(c.agent_export_kwh ?? 0).toFixed(1)} kWh`} label="exported to grid (net metering)" />
           <Stat value={`${(c.solar_wasted_kwh ?? 0).toFixed(1)} kWh`} label="solar wasted" />
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-6 pt-5 border-t border-border">
+          <Stat value={`${c.power_cut_hours ?? 0} h`} label="power cut" />
+          <Stat value={`${(c.agent_diesel_l ?? 0).toFixed(1)} L`} label={`diesel (fixed rule: ${(c.rule_diesel_l ?? 0).toFixed(1)} L)`}
+                tone={(c.agent_diesel_l ?? 0) <= (c.rule_diesel_l ?? 0) ? 'text-battery' : 'text-grid'} />
+          <Stat value={`${(c.agent_unserved_kwh ?? 0).toFixed(1)} kWh`} label={`essential load not served (fixed rule: ${(c.rule_unserved_kwh ?? 0).toFixed(1)})`} />
+          <Stat value={`₹${(c.agent_battery_wear_rs ?? 0).toFixed(2)}`} label={`battery wear (fixed rule: ₹${(c.rule_battery_wear_rs ?? 0).toFixed(2)})`} />
         </div>
       </Card>
     </section>

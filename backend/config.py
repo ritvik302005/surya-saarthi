@@ -17,6 +17,11 @@ def _env_limit(name, default):
 # Groq's free tier allows ~200k tokens/day; one AI-decided hour uses roughly 1k tokens
 # (estimate from past runs), so the whole demo gets 150 AI hours per rolling 24 h. Past a
 # limit, hours are decided by the fixed rule instead and marked as AI fallback.
+# Device endpoint (/plan): if DEVICE_API_KEY is set, callers must send it as X-Api-Key; if
+# PLAN_SIGNING_KEY is set, the 24 h schedule is signed (HMAC-SHA256) so the device can check it.
+DEVICE_API_KEY = os.getenv("DEVICE_API_KEY") or None
+PLAN_SIGNING_KEY = os.getenv("PLAN_SIGNING_KEY") or None
+
 AI_HOURS_PER_DAY = _env_limit("AI_HOURS_PER_DAY", 150)
 AI_HOURS_PER_SESSION_PER_DAY = _env_limit("AI_HOURS_PER_SESSION_PER_DAY", 48)
 REQUESTS_PER_MINUTE_PER_SESSION = _env_limit("REQUESTS_PER_MINUTE_PER_SESSION", 300)

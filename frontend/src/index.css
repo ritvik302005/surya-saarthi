@@ -35,6 +35,7 @@
   --solar: #ffb648;
   --battery: #4fd8c4;
   --grid: #ff6b5c;
+  --genset: #b99cff;   /* diesel genset (power cuts) */
 
   --font-display: "Space Grotesk Variable", "Segoe UI", sans-serif;
   --font-body: "Inter Variable", "Segoe UI", sans-serif;
@@ -72,6 +73,7 @@
   --color-solar: var(--solar);
   --color-battery: var(--battery);
   --color-grid: var(--grid);
+  --color-genset: var(--genset);
 
   --font-sans: var(--font-body);
   --font-display: var(--font-display);

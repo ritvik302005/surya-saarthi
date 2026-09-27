@@ -12,6 +12,8 @@ import ComparisonCard from './ComparisonCard.jsx'
 import SituationPanel from './SituationPanel.jsx'
 import ConfirmDialog from './ConfirmDialog.jsx'
 import MoreMenu from './MoreMenu.jsx'
+import OperatorPanel from './OperatorPanel.jsx'
+import WhatIfPanel from './WhatIfPanel.jsx'
 import { useCountUp } from './useCountUp.js'
 import { apiFetch, checkedJson, errorMessage, sessionUrl } from './api.js'
 import { PRODUCT_NAME } from './brand.js'
@@ -58,6 +60,8 @@ export default function Dashboard({ onBack }) {
   const [simStatusText, setSimStatusText] = useState('')  // latest reasoning, shown live
   const [simDone, setSimDone] = useState(null)            // summary banner after a finished run
   const [confirm, setConfirm] = useState(null)            // pending destructive action
+  const [controller, setController] = useState('optimizer')   // who decides: optimizer, ai or fixed
+  const [lang, setLang] = useState(() => { try { return localStorage.getItem('ss-lang') || 'en' } catch { return 'en' } })
 
   useEffect(() => { document.title = `Dashboard · ${PRODUCT_NAME}` }, [])
 
@@ -89,7 +93,7 @@ export default function Dashboard({ onBack }) {
       await checkedJson(await apiFetch('/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario }),
+        body: JSON.stringify({ scenario, keep_constraints: true }),
       }))
 
       setCyclesRun(0); setTotalSavings(0); setTotalCarbon(0); setHistory([]); setStepIndex(-1)
@@ -148,6 +152,7 @@ export default function Dashboard({ onBack }) {
         cycle: c.cycle, solar: c.solar_kw || 0, battery: c.battery_kw || 0, grid: c.grid_kw || 0, replanned: !!c.replanned,
       })))
       if (data?.scenario) setScenario(data.scenario)
+      if (data?.controller) setController(data.controller)
       setError(null)
     } catch (err) {
       setError(errorMessage(err))
@@ -193,6 +198,22 @@ export default function Dashboard({ onBack }) {
     } finally {
       setLoading(false)   // the "forecast missed" marker stays until the next hour runs
     }
+  }
+
+  async function changeController(next) {
+    try {
+      const r = await checkedJson(await apiFetch('/controller', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ controller: next }),
+      }))
+      setController(r.controller)
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+  }
+
+  function changeLang(next) {
+    setLang(next)
+    try { localStorage.setItem('ss-lang', next) } catch { /* private mode: keep it for this visit only */ }
   }
 
   async function resetSession() {
@@ -347,18 +368,45 @@ export default function Dashboard({ onBack }) {
               Live agent · SDG 7 · Clean energy
             </Badge>
             <h1 className="font-display font-semibold tracking-tight text-[clamp(2rem,4.5vw,3.4rem)] leading-[1.1] mb-4">
-              Every hour, it decides where the power comes from.
+              Every hour, it plans the next 24.
             </h1>
-            <p className="text-muted-foreground text-[clamp(0.95rem,1.4vw,1.1rem)] leading-relaxed max-w-xl mx-auto mb-2">
-              An AI agent reads sunlight, prices and demand, decides how to split power between
-              solar, battery and grid, and plans more cautiously when its own forecast turns out wrong.
+            <p className="text-muted-foreground text-[clamp(0.95rem,1.4vw,1.1rem)] leading-relaxed max-w-xl mx-auto mb-5">
+              Sun, battery, grid, diesel genset and flexible jobs, decided together: essentials stay on
+              through power cuts at the lowest cost and battery wear, and every decision is explained
+              in English or Hindi.
+            </p>
+
+            <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mb-2 font-mono text-xs">
+              <div role="radiogroup" aria-label="Who decides" className="flex items-center gap-1 rounded-lg border border-border p-1">
+                <span className="px-1.5 text-muted-foreground">Decides:</span>
+                {[['optimizer', 'Optimizer'], ['ai', 'AI (LLM)'], ['fixed', 'Fixed rule']].map(([key, label]) => (
+                  <button key={key} type="button" role="radio" aria-checked={controller === key}
+                          onClick={() => changeController(key)} disabled={simLoading || loading}
+                          className={`px-2.5 py-1 rounded-md ${controller === key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <div role="radiogroup" aria-label="Explanation language" className="flex items-center gap-1 rounded-lg border border-border p-1">
+                {[['en', 'English'], ['hi', 'हिंदी']].map(([key, label]) => (
+                  <button key={key} type="button" role="radio" aria-checked={lang === key} onClick={() => changeLang(key)}
+                          className={`px-2.5 py-1 rounded-md ${lang === key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'}`}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <p className="font-mono text-[0.7rem] text-muted-foreground mb-2">
+              {controller === 'optimizer' && 'Optimizer: a 24-hour plan re-made every hour; explanations come from its own numbers. No AI calls.'}
+              {controller === 'ai' && 'AI (LLM): the language model decides each hour (uses the daily AI budget); safety rules still check it.'}
+              {controller === 'fixed' && 'Fixed rule: solar, then battery, then grid — what a typical controller does. The comparison baseline.'}
             </p>
 
             <PipelineStepper stepIndex={stepIndex} replanFlash={replanFlash} />
             <p className="pipeline-caption">
-              Each hour: sense real conditions and check last hour's forecast → the agent proposes a
-              split (more cautiously if the forecast missed) → hard safety rules can override it →
-              battery state updates once → report.
+              Each hour: sense real conditions and check last hour's forecast → decide (more cautiously
+              if the forecast missed) → hard safety and battery limits check it → the battery updates
+              once → explain and report.
             </p>
 
             {error && (
@@ -373,17 +421,22 @@ export default function Dashboard({ onBack }) {
 
             {state && (
               <>
-                <SituationPanel state={state} scenarioLabel={scenarios[state.scenario] || state.scenario || ''} />
+                <SituationPanel state={state} decision={decision} scenarioLabel={scenarios[state.scenario] || state.scenario || ''} />
                 <div className="legend">
                   <span><i style={{ background: 'var(--solar)' }} />Solar</span>
                   <span><i style={{ background: 'var(--battery)' }} />Battery</span>
-                  <span><i style={{ background: 'var(--grid)' }} />Grid (last resort)</span>
+                  {state.grid_available === false
+                    ? <span><i style={{ background: 'var(--genset)' }} />Genset (power cut)</span>
+                    : <span><i style={{ background: 'var(--grid)' }} />Grid (last resort)</span>}
                 </div>
                 <EnergyFlow
                   solarKw={decision.solar_used_kw || 0}
                   batteryKw={decision.battery_used_kw || 0}
                   gridKw={decision.grid_used_kw || 0}
                   exportKw={decision.grid_export_kw || 0}
+                  gensetKw={decision.genset_kw || 0}
+                  unservedKw={decision.unserved_kw || 0}
+                  gridAvailable={state.grid_available !== false}
                   criticalKw={state.critical_load_kw || 0}
                   flexibleLoads={state.flexible_loads || []}
                   loading={loading}
@@ -392,8 +445,13 @@ export default function Dashboard({ onBack }) {
             )}
 
             {state?.reasoning && (
-              <blockquote className="reasoning">
-                "{state.reasoning}"
+              <blockquote className="reasoning" lang={lang === 'hi' && state.reasoning_hi ? 'hi' : 'en'}>
+                "{lang === 'hi' && state.reasoning_hi ? state.reasoning_hi : state.reasoning}"
+                {lang === 'hi' && !state.reasoning_hi && (
+                  <span className="block mt-1.5 not-italic font-mono text-[0.7rem] text-muted-foreground">
+                    हिंदी व्याख्या ऑप्टिमाइज़र मोड में मिलती है (Hindi explanations come with the optimizer).
+                  </span>
+                )}
                 {report?.replanned_this_cycle && (
                   <Badge variant="destructive" className="mt-2.5 font-mono text-[0.65rem] tracking-wider uppercase block w-fit">
                     Forecast missed{report.forecast_miss_kw != null ? ` by ${Math.abs(report.forecast_miss_kw).toFixed(1)} kW` : ''} — planned cautiously
@@ -407,21 +465,29 @@ export default function Dashboard({ onBack }) {
             <section className="max-w-6xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-px bg-border border-y border-border">
               <Card className="rounded-none border-0 gap-3.5 animate-in fade-in slide-in-from-bottom-2 duration-500">
                 <CardHeader>
-                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Battery reserve</CardTitle>
+                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Battery</CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-col gap-3.5">
                   <BatteryGauge pct={state.battery_soc_pct || 0} />
-                  <CardDescription>Never discharges below 20% reserve — enforced regardless of what the agent proposes.</CardDescription>
+                  {state.bms && (
+                    <dl className="grid grid-cols-2 gap-x-3 gap-y-1 font-mono text-xs">
+                      <dt className="text-muted-foreground">Health</dt><dd>{state.bms.soh_pct.toFixed(2)}%</dd>
+                      <dt className="text-muted-foreground">Temperature</dt><dd>~{state.bms.battery_temp_c.toFixed(0)} °C</dd>
+                      <dt className="text-muted-foreground">Charge limit</dt><dd>{state.bms.max_charge_kw.toFixed(1)} kW</dd>
+                      <dt className="text-muted-foreground">Discharge limit</dt><dd>{state.bms.max_discharge_kw.toFixed(1)} kW</dd>
+                    </dl>
+                  )}
+                  <CardDescription>Never below the 20% reserve, and never past the battery management system's live limits — whatever the controller proposes.</CardDescription>
                 </CardContent>
               </Card>
 
               <Card className="rounded-none border-0 gap-3.5 animate-in fade-in slide-in-from-bottom-2 duration-500 delay-75">
                 <CardHeader>
-                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Safety overrides this hour</CardTitle>
+                  <CardTitle className="font-mono text-xs tracking-wider uppercase text-muted-foreground font-normal">Safety and power-cut events this hour</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {alerts.length === 0 ? (
-                    <CardDescription>No overrides triggered — the proposed allocation stayed within every limit.</CardDescription>
+                    <CardDescription>Nothing to report — the plan stayed within every limit.</CardDescription>
                   ) : (
                     <ul className="alert-list">{alerts.map((a, i) => <li key={i}>{a}</li>)}</ul>
                   )}
@@ -436,7 +502,7 @@ export default function Dashboard({ onBack }) {
                   <div className="flex gap-8">
                     <div>
                       <span className="block font-display text-2xl font-semibold">₹{sessionSavings.toFixed(2)}</span>
-                      <span className="block text-xs text-muted-foreground mt-0.5">saved vs. grid-only baseline</span>
+                      <span className="block text-xs text-muted-foreground mt-0.5">saved vs no solar or battery (grid, diesel in cuts)</span>
                     </div>
                     <div>
                       <span className="block font-display text-2xl font-semibold">{sessionCarbon.toFixed(2)} kg</span>
@@ -449,6 +515,11 @@ export default function Dashboard({ onBack }) {
               </Card>
             </section>
           )}
+
+          <section className="max-w-6xl mx-auto px-6 sm:px-9 mt-8 mb-8 grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+            <OperatorPanel lang={lang} />
+            <WhatIfPanel lang={lang} />
+          </section>
 
           {state?.comparison && (
             <div className="mt-8">
@@ -467,7 +538,7 @@ export default function Dashboard({ onBack }) {
         </main>
 
         <footer className="mt-auto text-center px-4 py-8 border-t border-border font-mono text-xs tracking-wide text-muted-foreground">
-          <span className="block">Sense → Check forecast → Allocate → Safety limits → Apply → Report</span>
+          <span className="block">Sense → Check forecast → Decide → Safety and battery limits → Apply → Explain and report</span>
           <span className="block mt-2">
             <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Weather data by Open-Meteo.com</a>
             {' · '}Simulation only, not for real equipment{' · '}

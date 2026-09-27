@@ -28,34 +28,38 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 | Forecast correction for the next hours | Moved to Phase 1 | With today's noise model, each hour's cloud noise is independent, so correcting the next hours from this hour's miss would make forecasts *worse*. It becomes useful once real forecast errors (which persist for hours) come from Open-Meteo's archive. |
 | Team: contact 3–4 installers / mini-grid operators / DISCOM engineers | ⬜ | Start now; quote only conversations that happened. |
 
-### Phase 1 — Foundation and first honest results (weeks 1–4) ⬜
+### Phase 1 — Foundation and first honest results ✅ (compressed, 27 Sep 2026)
 
-| Task | Est. |
+| Task | Status | What was built / what's missing |
+|---|---|---|
+| Realistic physics | ✅ | PVWatts-style solar (losses, heat derating, inverter clipping); battery round-trip efficiency, wear cost, state of health (`physics.py`) |
+| Real weather | ✅ | Four recorded weeks of Delhi weather (actual ERA5 + day-ahead forecasts actually issued) in `data/weather_delhi.json` |
+| Forecast correction | ✅ measured, off | Helps one season, hurts three (MAE in `docs/07`); stays off |
+| Power cuts + genset | ✅ partly | Cut windows, essentials-only islanded mode, genset with minimum load, fuel and CO₂. **Not done:** outage-likelihood profile from Prayas ESMI data (cuts are entered or illustrative) |
+| Optimizer | ✅ | 24 h MILP (SciPy/HiGHS), MPC in the pipeline, zero overrides in 1,344 benchmark hours (`optimizer.py`) |
+| Benchmark | ✅ | Fixed rule vs optimizer vs perfect-forecast optimizer on 4 seasons × 2 conditions; AI on a 1-day sample. Results: `docs/07-Benchmark-Results.md` |
+
+### Phase 2 — Differentiators ✅ (compressed)
+
+| Task | Status | Notes |
+|---|---|---|
+| Operator notes → constraints | ✅ | LLM with strict schema + rule-based fallback, validated, confirmed before applying (`notes.py`) |
+| Grounded explanations EN/HI | ✅ | Templated from the plan's numbers, rewritten after the safety check from what was applied (`explain.py`). LLM phrasing + truthfulness checker **not done** (templates are true by construction) |
+| Software BMS | ✅ partly | Pack-level live limits, temperature derating/cut-off, health, fault injection (`bms.py`). **Not done:** cell-level model, Kalman-filter SOC, BLAST-Lite wear (simple throughput model instead) |
+| What-if panel | ✅ | Sun, power cut, battery health, peak tariff, extra load, DISCOM limit; no AI calls (`whatif.py`, `WhatIfPanel.jsx`) |
+| Demand response | ✅ | Grid-import caps in the optimizer (notes or what-if); measured against the same day without the cap in what-if |
+
+### Phase 3 — Credibility and delivery ⬜ mostly open
+
+| Task | Status |
 |---|---|
-| Realistic physics: solar losses + inverter limit (no more > 10 kW from a 10 kW system), battery round-trip efficiency + wear cost | 3–4 days |
-| Real weather: Open-Meteo Historical Forecast API vs Historical Weather API for past days; then forecast correction | 2 days |
-| Power cuts + genset: scheduled cut windows, outage-likelihood profile from Prayas ESMI data, islanded mode (essentials only), genset minimum run time and fuel | 4–5 days |
-| Optimizer: 24 h LP/MPC (PuLP or CVXPY + HiGHS) | 4–5 days |
-| Benchmark: rules vs LLM vs optimizer vs hybrid over real days — cost, grid kWh, battery wear, diesel hours, essential-load outages, overrides | 3 days |
-
-**Checkpoint (week 4):** the results table for the deck. Groq: the LLM variant needs ~1k tokens × 24+ calls per simulated day — run ~10 days spread over several dates, or use a small paid tier.
-
-### Phase 2 — Differentiators (weeks 5–8) ⬜
-
-- LLM context interpreter: Hindi/English operator notes ("kal shaam 7 se 10 bijli jayegi") → checked constraints; the LLM never commands a device.
-- Grounded explanations from the optimizer's own facts, phrased in Hindi or English, checked for truthfulness.
-- Software BMS: cell-level model, dynamic charge/discharge limits, health tracking, BLAST-Lite wear; the safety shield obeys BMS limits.
-- What-if panel (solar −40%, outage window, battery health, tariff) — runs without the AI.
-- Demand-response events, measured against a baseline day.
-
-### Phase 3 — Credibility and delivery (weeks 9–12) ⬜
-
-- ESP32 testbed + model synced to it (digital twin) + condition monitoring ("clean your panels").
-- Edge fallback: safety rules + cached 24 h schedule on the device.
-- Security: logins on control endpoints, signed setpoints.
-- Deploy, deck, 90-second video, paper draft.
-
-**Cut order if time runs short:** multi-site demo → attack detection → testbed sync. Never cut the benchmark.
+| Signed 24 h plan for an edge device, API key | ✅ `GET /plan` (HMAC-SHA256) |
+| ESP32 testbed, digital twin synced to it, condition monitoring | ⬜ needs hardware |
+| Edge fallback running on a device | ⬜ (interface exists: `/plan` + fixed-rule fallback) |
+| Logins on control endpoints | ⬜ (public demo; only `/plan` is key-protected) |
+| Deploy v2, deck, video, paper | ⬜ needs the GitHub decision |
+| Stakeholder interviews | ⬜ team |
+| Multi-site coordination, attack detection | ⬜ cut (as planned) |
 
 ## Open decisions (team)
 

@@ -1,5 +1,37 @@
 {
- "source": "backend/run_scenarios.py",
- "note": "Empty until a validated scenario run is saved; the landing results strip stays hidden.",
- "scenarios": {}
+ "source": "backend/benchmark.py",
+ "generated_at": "2026-09-27T15:59",
+ "days": 7,
+ "seasons": [
+  "winter",
+  "summer",
+  "monsoon",
+  "post-monsoon"
+ ],
+ "conditions": {
+  "grid normal": {
+   "cost_reduction_pct": 10.0,
+   "saved_rs_per_day": 43.0,
+   "forecast_cost_pct": -0.0,
+   "diesel_l": {
+    "fixed": 0.0,
+    "optimizer": 0.0
+   },
+   "unserved_kwh": 0.0,
+   "overrides": 0,
+   "hours": 672
+  },
+  "evening cuts": {
+   "cost_reduction_pct": 26.0,
+   "saved_rs_per_day": 165.0,
+   "forecast_cost_pct": 0.0,
+   "diesel_l": {
+    "fixed": 97.5,
+    "optimizer": 36.7
+   },
+   "unserved_kwh": 0.0,
+   "overrides": 0,
+   "hours": 672
+  }
+ }
 }

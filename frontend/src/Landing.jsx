@@ -2,8 +2,9 @@ import { lazy, Suspense, useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { LiquidButton } from '@/components/ui/liquid-glass-button'
-import { Sun, BatteryCharging, UtilityPole, Droplets, CarFront, House, GraduationCap, Tractor } from 'lucide-react'
+import { Sun, BatteryCharging, UtilityPole, Fuel, Droplets, CarFront, House, GraduationCap, Tractor } from 'lucide-react'
 import ResultsStrip from './ResultsStrip.jsx'
+import results from './data/results-summary.json'
 import { PRODUCT_NAME, TAGLINE, REPO_URL, SIH_PS_ID, SIH_PS_TITLE, TEAM_NAME } from './brand.js'
 import './Landing.css'
 
@@ -47,35 +48,42 @@ function Reveal({ children, className = '', delay = 0 }) {
 }
 
 const STAGES = [
-  { name: 'Sense', desc: 'Pulls real solar irradiance for the site from a live weather API, plus an 8-hour forecast, and reads a simulated demand profile.' },
+  { name: 'Sense', desc: 'Reads sunlight and air temperature for the site from a weather service, plus a 24-hour forecast, the battery management system’s live limits, any scheduled power cut, and the demand profile.' },
   { name: 'Check forecast', desc: 'Compares this hour’s real sunlight with what it forecast an hour ago. If it missed by more than 1 kW, this hour is planned more cautiously.' },
-  { name: 'Allocate', desc: "An LLM weighs solar, battery, grid and time-of-day prices, decides what to store, export or defer, and explains why." },
-  { name: 'Safety limits', desc: "A hard, non-negotiable rule check — the model's suggestion can be overridden, never the reserve floor." },
-  { name: 'Apply', desc: 'The battery charge updates once, by exactly what was decided, and deferred jobs carry forward to their deadline.' },
-  { name: 'Report', desc: 'Savings and carbon avoided are computed against a grid-only baseline, and compared live with a fixed-rule controller.' },
+  { name: 'Decide', desc: 'A 24-hour optimizer plans solar, battery, grid, diesel genset and flexible jobs together, and plans again every hour. An AI (LLM) mode can decide instead, for comparison.' },
+  { name: 'Safety and battery limits', desc: 'Hard rules check every decision: never below the 20% reserve or past the battery’s live limits, essentials always powered, no grid in a power cut, jobs done by their deadline.' },
+  { name: 'Apply', desc: 'The battery charge updates once, by exactly what was decided (with charge and discharge losses), and waiting jobs carry forward.' },
+  { name: 'Explain and report', desc: 'Explains the decision in plain English or Hindi from the plan’s own numbers, and compares it live with a fixed-rule controller on the same conditions.' },
 ]
 
 const MANAGES = [
-  { icon: Sun, name: 'Solar panels', desc: 'Uses sunshine first, and knows the next 8 hours of forecast.', color: 'text-solar' },
-  { icon: BatteryCharging, name: 'Battery', desc: 'Stores cheap daytime sun for the costly evening peak. Never below 20%.', color: 'text-battery' },
-  { icon: UtilityPole, name: 'Grid', desc: 'Buys only what solar and battery can\u2019t cover; exports the rest under net metering.', color: 'text-grid' },
+  { icon: Sun, name: 'Solar panels', desc: 'Uses sunshine first, with real losses and heat derating, and a 24-hour forecast.', color: 'text-solar' },
+  { icon: BatteryCharging, name: 'Battery', desc: 'Saves sun for the evening peak and for power cuts. Counts wear and losses; never below 20%.', color: 'text-battery' },
+  { icon: UtilityPole, name: 'Grid', desc: 'Buys only what solar and battery can’t cover; exports the rest under net metering.', color: 'text-grid' },
+  { icon: Fuel, name: 'Diesel genset', desc: 'Only in a power cut, and as little as possible: the battery is filled before the cut starts.', color: 'text-genset' },
   { icon: Droplets, name: 'Water pump', desc: 'A flexible job: waits for sunshine, but always runs before its deadline.', color: 'text-battery' },
   { icon: CarFront, name: 'EV charging', desc: 'Moved out of the peak-price hours, finished by morning.', color: 'text-solar' },
 ]
 
 const AUDIENCE = [
-  { icon: House, name: 'Rooftop solar homes', desc: 'Households with solar and a battery under PM Surya Ghar Muft Bijli Yojana: lower bills without micromanaging.' },
-  { icon: GraduationCap, name: 'Colleges and campuses', desc: 'Get more from solar already installed: cut peak-hour costs and schedule pumps and EV charging.' },
-  { icon: Tractor, name: 'Village and farm microgrids', desc: 'Keep essential supply reliable and run solar pumps on sunshine instead of peak-price grid power.' },
+  { icon: House, name: 'Homes with solar and backup', desc: 'Rooftop solar homes (e.g. under PM Surya Ghar) with an inverter battery for power cuts: essentials stay on, bills go down.' },
+  { icon: GraduationCap, name: 'Schools, clinics and small businesses', desc: 'Solar, battery and a diesel genset: keep essentials on through cuts with less diesel, and move pumps and EV charging to cheaper hours.' },
+  { icon: Tractor, name: 'Village and farm mini-grids', desc: 'Reliable essential supply, solar pumps run on sunshine, and plain-language explanations for the operator in Hindi.' },
 ]
 
+const normal = results.conditions?.['grid normal']
+const cuts = results.conditions?.['evening cuts']
+
 const FAQ = [
-  { q: 'Is this running on real data?', a: 'Sunlight comes from a live weather API (Open-Meteo) for the site, with an 8-hour forecast. Demand is a simulated daily profile of a home or small campus, because we don\u2019t have smart-meter data yet. Every assumption is listed in the project README.' },
-  { q: 'What if the AI makes a wrong decision?', a: 'It can\u2019t act on it. Every decision passes through hard safety rules afterwards: the battery never goes below 20%, charge and discharge stay under 5 kW, essential loads are always powered and flexible jobs always finish before their deadline. When a rule steps in, the dashboard shows it.' },
-  { q: 'Does it need the internet?', a: 'The AI planner and live weather use the internet. If either is unavailable, a fixed safe allocation takes over for that hour, so power is never left undecided.' },
-  { q: 'How is it better than today\u2019s controllers?', a: 'A normal controller follows one rule: solar, then battery, then grid. Surya Saarthi also looks at time-of-day prices and the weather forecast, saves battery for the costly evening peak and moves pumps and EV charging to cheaper hours. A fixed-rule controller runs on the same inputs every hour, so the difference is measured, not claimed.' },
+  { q: 'Is this running on real data?', a: 'Sunlight and temperature are real: the live demo uses a weather service’s forecast for the site, and the benchmark uses four recorded weeks of Delhi weather together with the day-ahead forecasts that were actually issued. Demand is a simulated daily profile, because we don’t have smart-meter data yet. Every assumption is listed in the project README.' },
+  { q: 'Why an optimizer and an AI?', a: 'Deciding how many kilowatts go where, hour by hour, is arithmetic, and an optimizer does it exactly and instantly. Language is where AI is strong: it reads what an operator writes, like “kal shaam 7 se 10 bijli jayegi”, turns it into a checked constraint for the optimizer, and shows what it understood before anything changes. You can also switch the AI on to decide, and compare.' },
+  { q: 'How is it better than today’s controllers?', a: normal
+      ? `A fixed-rule controller uses solar, then battery, then grid. On four recorded weeks of Delhi weather, with the same conditions and safety rules for both, the optimizer ran about ${normal.cost_reduction_pct.toFixed(0)}% cheaper with the grid normal${cuts ? `, and about ${cuts.cost_reduction_pct.toFixed(0)}% cheaper with a daily 3-hour evening power cut, using ${cuts.diesel_l.optimizer.toFixed(0)} litres of diesel instead of ${cuts.diesel_l.fixed.toFixed(0)}` : ''}. These are simulation results with stated assumptions, not field measurements.`
+      : 'A fixed-rule controller uses solar, then battery, then grid. Surya Saarthi plans 24 hours ahead with prices, forecasts and power cuts; a fixed-rule controller runs on the same inputs, so the difference is measured, not claimed.' },
+  { q: 'What if a decision is wrong?', a: 'It can’t act on it. Every decision, from the optimizer or the AI, passes through hard safety rules afterwards: the battery never goes below 20% or past the battery management system’s limits, essential loads are always powered and flexible jobs always finish before their deadline. When a rule steps in, the dashboard shows it.' },
+  { q: 'Does it need the internet?', a: 'The live weather and the AI need it; the optimizer runs on the server. A site controller can download a signed 24-hour plan and keep following it, with its own safety rules, if the connection drops; if the plan is stale it falls back to the fixed rule.' },
   { q: 'What would it cost to use?', a: 'It is software only, built with free and open-source tools, and runs on a small server. It needs no new panels or batteries; a real site would add a link to its inverter or smart meter.' },
-  { q: 'Can it control real equipment?', a: 'Not yet. Today it runs as a simulation. The design keeps a clear place to connect an inverter or smart meter later, with the same safety rules in front of it.' },
+  { q: 'Can it control real equipment?', a: 'Not yet. Today it runs as a simulation. The signed 24-hour plan is the interface a real inverter or site controller would use, with the same safety rules in front of it.' },
 ]
 
 export default function Landing({ onStart }) {
@@ -108,9 +116,9 @@ export default function Landing({ onStart }) {
           The sun doesn't send an invoice.<br />Many microgrids waste it anyway.
         </h1>
         <p className="relative z-10 text-muted-foreground text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed max-w-xl mb-9">
-          An AI agent that decides every hour whether to use solar, battery or grid power — storing
-          sunshine for the evening peak, exporting the rest, moving flexible jobs to cheaper hours —
-          and planning more cautiously when its own forecast turns out wrong.
+          Plans every hour of solar, battery, grid and diesel together — saving sunshine for the
+          evening peak and for power cuts, moving flexible jobs to cheaper hours, burning less diesel —
+          and explains each decision in English or Hindi.
         </p>
         <LiquidButton size="xl" onClick={onStart} className="relative z-10">See it decide →</LiquidButton>
 
@@ -133,6 +141,9 @@ export default function Landing({ onStart }) {
           <p>And since the 2023 Time-of-Day tariff rules, <em>when</em> you use power matters: at least
             20% cheaper during solar hours, and 10–20% costlier at the evening peak (set by each
             state; we assume 20%). A fixed rule can't take advantage of that. {PRODUCT_NAME} can.</p>
+          <p>Where the grid goes out, it matters even more. A battery that a fixed rule drained at
+            6 pm is empty when the evening power cut starts, so the diesel genset runs instead.
+            Told about the cut in advance, {PRODUCT_NAME} fills the battery first.</p>
         </Reveal>
       </section>
 
@@ -153,8 +164,8 @@ export default function Landing({ onStart }) {
 
       <section className="landing-section">
         <Reveal><span className="section-eyebrow">What it manages</span></Reveal>
-        <Reveal delay={80}><h2>Five things, decided together every hour.</h2></Reveal>
-        <div className="card-grid five">
+        <Reveal delay={80}><h2>Six things, decided together every hour.</h2></Reveal>
+        <div className="card-grid six">
           {MANAGES.map((m, i) => (
             <Reveal key={m.name} delay={120 + i * 50} className="info-card">
               <m.icon className={`h-6 w-6 ${m.color}`} aria-hidden="true" />
@@ -167,7 +178,7 @@ export default function Landing({ onStart }) {
 
       <section className="landing-section">
         <Reveal><span className="section-eyebrow">Who it's for</span></Reveal>
-        <Reveal delay={80}><h2>Anywhere solar and a battery share a roof with the grid.</h2></Reveal>
+        <Reveal delay={80}><h2>Wherever solar and a battery have to keep the lights on.</h2></Reveal>
         <div className="card-grid three">
           {AUDIENCE.map((a, i) => (
             <Reveal key={a.name} delay={120 + i * 60} className="info-card">
@@ -180,13 +191,14 @@ export default function Landing({ onStart }) {
       </section>
 
       <section className="landing-section statement-section">
-        <Reveal><h2 className="statement">It can reason. It cannot override a 20% reserve.</h2></Reveal>
+        <Reveal><h2 className="statement">It plans. It explains. It cannot override the safety rules.</h2></Reveal>
         <Reveal delay={100} className="landing-text">
-          <p>The allocation decision comes from a language model — genuinely useful for weighing
-            solar against battery against grid, and for explaining its own reasoning in plain
-            language. But it never gets the final word on safety. A fixed, deterministic rule
-            checks every decision afterward and corrects it if the battery would drop below reserve
-            or a load would go unmet. The model suggests; the rules decide.</p>
+          <p>An optimizer does the arithmetic: the next 24 hours of sun, prices, jobs and power cuts,
+            planned again every hour. The AI does the language: it reads the operator's notes into
+            checked constraints, and can take over deciding when you want to compare. Neither gets
+            the final word. Fixed rules check every decision afterwards, together with the battery
+            management system's live limits, and step in if the battery would drop below its reserve
+            or a load would go unmet.</p>
         </Reveal>
       </section>
 

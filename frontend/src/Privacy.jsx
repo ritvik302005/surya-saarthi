@@ -20,7 +20,7 @@ const CREDITS = [
     Wave background by {ext('https://21st.dev/@xubohuah/components/wave-background', 'Kain Xu')}, inspired by Antoine Wodniack (MIT).
     WebGL shader and liquid glass button by {ext('https://21st.dev/@designali-in', 'Ali Imam')}, from 21st.dev, where no licence is stated.
     All three are adapted for this site.</>],
-  ['Server', <>FastAPI, Pydantic, LangGraph and LangChain (MIT); Uvicorn and python-dotenv (BSD); Requests and the Groq SDK (Apache 2.0).</>],
+  ['Server', <>FastAPI, Pydantic, LangGraph and LangChain (MIT); Uvicorn and python-dotenv (BSD); Requests and the Groq SDK (Apache 2.0); SciPy and NumPy (BSD) with the HiGHS optimization solver (MIT).</>],
 ]
 
 export default function Privacy({ onBack }) {
@@ -74,8 +74,11 @@ export default function Privacy({ onBack }) {
         <ul>
           <li><strong>Your browser → our server (Render):</strong> the buttons you press (run an hour,
             simulate days, reset) and the session ID.</li>
-          <li><strong>Our server → Groq (AI provider):</strong> the simulated numbers for each hour:
-            sunlight, battery, demand, price and flexible jobs. Nothing about you is sent.</li>
+          <li><strong>Our server → Groq (AI provider):</strong> when the AI decides, the simulated
+            numbers for each hour: sunlight, battery, demand, price and flexible jobs. When you type an
+            operator note, the text of that note, so it can be understood. Don’t type personal details
+            into a note. Notes aren’t stored; only the power-cut, battery-target or grid-limit settings
+            you confirm are kept, in memory, for your session.</li>
           <li><strong>Our server → Open-Meteo:</strong> the fixed coordinates of the simulated site
             (Delhi), to get sunlight data. Never your location.</li>
           <li><strong>Hosting:</strong> like any website, our hosts (Vercel for this page, Render for the

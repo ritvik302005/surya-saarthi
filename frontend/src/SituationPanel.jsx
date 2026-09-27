@@ -15,7 +15,7 @@ function Tile({ label, value, sub, valueClass = '' }) {
 }
 
 // What the agent saw this cycle — so a viewer can see *why* it decided what it did.
-export default function SituationPanel({ state, scenarioLabel }) {
+export default function SituationPanel({ state, decision = {}, scenarioLabel }) {
   const hour = state.sim_hour ?? 0
   const day = Math.floor(hour / 24) + 1
   const band = BAND_STYLE[state.price_band] || BAND_STYLE.normal
@@ -36,7 +36,13 @@ export default function SituationPanel({ state, scenarioLabel }) {
           : `forecast said ${expected.toFixed(1)} kW`}
         valueClass={surprise ? 'text-grid' : 'text-solar'}
       />
-      <Tile label="Grid price" value={`₹${(state.grid_price_per_kwh ?? 0).toFixed(2)}/kWh`} sub={band.text} valueClass={band.className} />
+      {state.grid_available === false ? (
+        <Tile label="Grid" value="Power cut"
+              sub={(decision.genset_kw || 0) > 0.05 ? `genset running ${decision.genset_kw.toFixed(1)} kW` : 'running on solar and battery'}
+              valueClass="text-grid" />
+      ) : (
+        <Tile label="Grid price" value={`₹${(state.grid_price_per_kwh ?? 0).toFixed(2)}/kWh`} sub={band.text} valueClass={band.className} />
+      )}
       <Tile
         label="Demand"
         value={`${(state.critical_load_kw ?? 0).toFixed(1)} kW essential`}

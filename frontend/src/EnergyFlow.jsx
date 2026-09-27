@@ -15,25 +15,32 @@ function Node({ x, y, r, label, value, unit, color, dim }) {
   )
 }
 
-export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exportKw = 0, criticalKw = 0, flexibleLoads = [], loading }) {
+export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exportKw = 0, gensetKw = 0, unservedKw = 0,
+                                     gridAvailable = true, criticalKw = 0, flexibleLoads = [], loading }) {
   const totalLoad = criticalKw + flexibleLoads.filter(l => !l.deferred).reduce((s, l) => s + l.power_kw, 0)
   const deferred = flexibleLoads.filter(l => l.deferred)
 
   const solar = useCountUp(solarKw)
   const battery = useCountUp(Math.abs(batteryKw))
   const charging = batteryKw < -0.05
-  const grid = useCountUp(gridKw)
+  // In a power cut the third source is the diesel genset instead of the grid.
+  const thirdKw = gridAvailable ? gridKw : gensetKw
+  const third = useCountUp(thirdKw)
+  const thirdColor = gridAvailable ? 'var(--grid)' : 'var(--genset)'
   const load = useCountUp(totalLoad)
 
   const edges = [
     { from: [150, 90], kw: solarKw, color: 'var(--solar)', label: 'solar' },
     { from: [150, 210], kw: Math.max(0, batteryKw), color: 'var(--battery)', label: 'battery' },
-    { from: [150, 330], kw: gridKw, color: 'var(--grid)', label: 'grid' },
+    { from: [150, 330], kw: thirdKw, color: thirdColor, label: 'third' },
   ]
   const to = [640, 210]
 
   return (
-    <div className="energy-flow" aria-label="Live power allocation from solar, battery, and grid to the load">
+    <div className="energy-flow"
+         aria-label={`Power right now: solar ${solarKw.toFixed(1)} kW, battery ${charging ? 'charging' : 'supplying'} ${Math.abs(batteryKw).toFixed(1)} kW, `
+           + (gridAvailable ? `grid ${gridKw.toFixed(1)} kW` : `power cut, genset ${gensetKw.toFixed(1)} kW`)
+           + `, load ${totalLoad.toFixed(1)} kW${unservedKw > 0.05 ? `, ${unservedKw.toFixed(1)} kW not served` : ''}`}>
       <svg viewBox="0 0 760 420" className={loading ? 'flow-svg computing' : 'flow-svg'}>
         {edges.map((e) => {
           const [x1, y1] = e.from
@@ -59,10 +66,21 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exp
 
         <Node x={150} y={90} r={40} label="SOLAR" value={solar.toFixed(1)} unit="kW" color="var(--solar)" dim={solarKw <= 0.05} />
         <Node x={150} y={210} r={40} label="BATTERY" value={battery.toFixed(1)} unit={charging ? 'kW in' : 'kW'} color="var(--battery)" dim={Math.abs(batteryKw) <= 0.05} />
-        <Node x={150} y={330} r={40} label="GRID" value={grid.toFixed(1)} unit="kW" color="var(--grid)" dim={gridKw <= 0.05} />
-        {exportKw > 0.05 && (
+        <Node x={150} y={330} r={40} label={gridAvailable ? 'GRID' : 'GENSET'} value={third.toFixed(1)} unit="kW"
+              color={thirdColor} dim={thirdKw <= 0.05} />
+        {!gridAvailable && (
+          <text x={150} y={392} textAnchor="middle" className="node-unit" style={{ fill: 'var(--grid)' }}>
+            power cut: grid off
+          </text>
+        )}
+        {gridAvailable && exportKw > 0.05 && (
           <text x={150} y={392} textAnchor="middle" className="node-unit" style={{ fill: 'var(--solar)' }}>
             ↑ exporting {exportKw.toFixed(1)} kW
+          </text>
+        )}
+        {gridAvailable && gensetKw > 0.05 && (
+          <text x={150} y={408} textAnchor="middle" className="node-unit" style={{ fill: 'var(--genset)' }}>
+            + genset {gensetKw.toFixed(1)} kW
           </text>
         )}
 
@@ -71,6 +89,11 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exp
           <text y={-70} textAnchor="middle" className="node-label">LOAD</text>
           <text y="-6" textAnchor="middle" className="node-value load">{load.toFixed(1)}</text>
           <text y="18" textAnchor="middle" className="node-unit">kW total</text>
+          {unservedKw > 0.05 && (
+            <text y="84" textAnchor="middle" className="node-unit" style={{ fill: 'var(--grid)' }}>
+              {unservedKw.toFixed(1)} kW not served
+            </text>
+          )}
         </g>
       </svg>
 

@@ -35,6 +35,14 @@ Two deployable units, two external services. No database.
 | Hosting | Vercel (frontend, static), Render (backend, long-running web service) | Backend keeps in-memory state, so it needs a long-running process, not serverless |
 | Tests | Plain Python test scripts (offline + live) | Zero extra tooling; runnable anywhere |
 
+> **v2 additions (27 Sep 2026)** — the decide step is now `nodes/decide.py`, dispatching to the
+> **optimizer** (`optimizer.py` + `nodes/optimize.py`, 24 h MILP via SciPy/HiGHS, the default), the **AI**
+> (`nodes/allocation.py`) or the **fixed rule**; the baseline runs the fixed rule through the same graph.
+> New modules: `physics.py` (solar, battery, genset), `bms.py` (software BMS), `explain.py` (EN/HI
+> explanations), `notes.py` (operator notes), `whatif.py`, `benchmark.py` + `data/`. New endpoints: `/controller`,
+> `/note/*`, `/constraints*`, `/bms/fault`, `/whatif`, `/plan`. The diagrams below still show the SIH version;
+> see the README and `docs/06-V2-Roadmap.md` for v2.
+
 ## 3. Components
 
 ```mermaid

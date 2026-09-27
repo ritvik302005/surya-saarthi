@@ -1,6 +1,6 @@
 import physics
 from config import (CYCLE_HOURS, GRID_EMISSION_FACTOR_KG_PER_KWH, EXPORT_CREDIT_RS_PER_KWH,
-                    GENSET_RS_PER_KWH, DIESEL_CO2_KG_PER_L)
+                    GENSET_RS_PER_KWH, GENSET_KWH_PER_L, DIESEL_CO2_KG_PER_L)
 
 
 def generate_report_node(state):
@@ -9,16 +9,16 @@ def generate_report_node(state):
     price = state["grid_price_per_kwh"]
     grid_ok = state.get("grid_available", True)
 
-    # Baseline: a grid-only site serving the same loads this hour. Every
-    # flexible job is served exactly once (deferred jobs carry forward), so
-    # over a full run this counts all demand without double counting. In a power
-    # cut a grid-only site has nothing, so the baseline costs nothing then.
+    # Baseline: a site with no solar or battery serving the same loads this hour — from
+    # the grid, or from a diesel genset in a power cut (what such sites use today). Every
+    # flexible job is served exactly once (deferred jobs carry forward), so over a full
+    # run this counts all demand without double counting.
     deferred = [l["name"] for l in state["flexible_loads"] if l.get("deferred")]
     served_load_kw = round(state["critical_load_kw"] + sum(
         l["power_kw"] for l in state["flexible_loads"] if not l.get("deferred")
     ) - decision.get("unserved_kw", 0), 2)
 
-    baseline_cost = round(served_load_kw * price * CYCLE_HOURS, 2) if grid_ok else 0.0
+    baseline_cost = round(served_load_kw * (price if grid_ok else GENSET_RS_PER_KWH) * CYCLE_HOURS, 2)
     import_cost = round(grid_used * price * CYCLE_HOURS, 2)
     export_kw = decision.get("grid_export_kw", 0)
     export_credit = round(export_kw * EXPORT_CREDIT_RS_PER_KWH * CYCLE_HOURS, 2)
@@ -31,7 +31,8 @@ def generate_report_node(state):
     savings = round(baseline_cost - net_cost, 2)
 
     # Exported solar displaces grid generation elsewhere, so it also avoids CO2; diesel adds CO2.
-    baseline_carbon = round(served_load_kw * CYCLE_HOURS * GRID_EMISSION_FACTOR_KG_PER_KWH, 2) if grid_ok else 0.0
+    baseline_factor = GRID_EMISSION_FACTOR_KG_PER_KWH if grid_ok else DIESEL_CO2_KG_PER_L / GENSET_KWH_PER_L
+    baseline_carbon = round(served_load_kw * CYCLE_HOURS * baseline_factor, 2)
     actual_carbon = round((grid_used - export_kw) * CYCLE_HOURS * GRID_EMISSION_FACTOR_KG_PER_KWH
                           + diesel_l * DIESEL_CO2_KG_PER_L, 2)
     carbon_avoided = round(baseline_carbon - actual_carbon, 2)
