@@ -2,22 +2,23 @@
 
 | | |
 |---|---|
-| Version | 1.0 (MVP) |
+| Version | **v2** (27 Sep 2026) |
 | Audience | Frontend developers and designers working in `frontend/src` |
-| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [05-Development-Plan](05-Development-Plan.md) |
+| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [06-V2-Roadmap](06-V2-Roadmap.md) |
 
-Status tags: **Done** = in the current build · **Planned** = to build for MVP.
+Status tags: **Done** = in the current build · **Planned** = not built.
 
 ---
 
 ## 1. Design principles
 
-1. **Show why, not just what.** Every decision is shown next to the inputs that caused it (time, sun, price, demand) and the agent's one-sentence reason.
-2. **Safety is visible.** When a hard rule overrides the AI, say so in plain words. "No overrides" is also shown.
-3. **Honest numbers.** Every figure has a baseline ("vs grid-only", "vs rule-based") and simulated inputs are labelled.
+1. **Show why, not just what.** Every decision sits next to the inputs that caused it and a plain explanation — in English or Hindi.
+2. **Safety is visible.** When a rule, the BMS or a power cut changes what happens, say so in plain words.
+3. **Honest numbers.** Every figure names its baseline ("vs fixed rule", "vs no solar or battery"); simulated inputs and placeholder prices are labelled; landing numbers come only from the benchmark file.
 4. **One primary action per screen.** Landing → *See it decide*. Dashboard → *Run 1 hour* (or *Simulate N days*).
-5. **Calm, technical, dark.** Low-chrome dark UI; colour is reserved for energy sources and status.
-6. **Plain language for non-experts.** Prefer "sunlight", "battery", "grid price" over jargon; technical terms (LangGraph, SOC) stay in docs, not headlines.
+5. **Calm, technical, dark.** Colour is reserved for energy sources and status (solar amber, battery teal, grid red, genset violet).
+6. **Plain language, two languages.** "Sunlight", "battery", "power cut", "grid price"; explanations and panels available in Hindi.
+7. **Never break.** No WebGL → flat diagram; reduced motion → still scene; AI unavailable → fixed rule, labelled.
 
 ## 2. User journey (demo viewer)
 
@@ -25,213 +26,171 @@ Status tags: **Done** = in the current build · **Planned** = to build for MVP.
 journey
   title First visit (target < 3 min)
   section Understand
-    Land on hero, read headline: 5: Viewer
-    Scroll problem + "how it decides": 4: Viewer
+    Land on hero, read headline + results strip: 5: Viewer
+    Scroll problem, how it decides, FAQ: 4: Viewer
   section Try
-    Click "See it decide": 5: Viewer
-    Press "Run 1 hour", watch pipeline: 5: Viewer
-    Read situation panel + reasoning: 4: Viewer
+    Open dashboard, press Run 1 hour: 5: Viewer
+    Watch the 3D scene, read the explanation (EN / हिंदी): 5: Viewer
+  section Instruct
+    Type "aaj shaam 7 se 10 bijli jayegi", confirm: 5: Viewer
+    Simulate 1 day, watch the battery fill before the cut: 5: Viewer
   section Trust
-    See safety overrides card: 4: Viewer
-    Run 1-day simulation: 4: Viewer
-    Read "Agent vs rule-based" card: 5: Viewer
-  section Take away
-    Download CSV / open history: 3: Viewer
+    What-if: 40% less sun, a cut tonight: 4: Viewer
+    Comparison vs fixed rule (cost, diesel): 5: Viewer
+    Switch to AI (LLM) mode and compare: 3: Viewer
 ```
 
-## 3. Information architecture and navigation
+## 3. Information architecture
 
 ```
-Landing (/)                       Dashboard (same URL, view state)
-├─ Nav: brand · GitHub · Open dashboard      ├─ Header: brand · [scenario · days · Simulate N days]
-├─ Hero + CTA "See it decide"                │          · ← Overview · History report · Reset session · Run 1 hour
-├─ Results strip (hidden until data)                ├─ Simulation progress bar (while running)
-├─ The problem                               ├─ Intro + pipeline stepper
-├─ How it decides (6 stages)                 ├─ Situation panel
-├─ What it manages                           ├─ Energy flow + deferred jobs strip
-├─ Who it's for                              ├─ Reasoning quote (+ "Forecast missed" badge)
-├─ Safety statement                          ├─ Cards: Battery reserve · Safety overrides · Session impact
-├─ FAQ                                       ├─ Agent vs rule-based card (+ CSV link)
-├─ Live-demo CTA                             ├─ Power-mix history chart
-└─ Footer: SIH · SDG 7 · Open-Meteo ·        ├─ History report (modal)
-   GitHub · Privacy · Credits                └─ Footer: loop · Open-Meteo · Privacy
+Landing (/)                                   Dashboard (same URL, view state)
+├─ Nav: brand · GitHub · Open dashboard        ├─ Header: brand · [scenario · days · Simulate N days]
+├─ Hero + CTA "See it decide"                  │          · ← Overview · History report · Reset session · Run 1 hour
+├─ Results strip (from benchmark)              ├─ Progress bar / simulation-complete banner
+├─ The problem (ToD prices, power cuts)        ├─ Intro: H1, "Decides:" switch, language switch, stepper
+├─ How it decides (6 stages)                   ├─ Situation panel (time, sunlight, grid price / power cut, demand)
+├─ What it manages (6 cards)                   ├─ Legend + 3D energy scene (flat fallback) + deferred jobs
+├─ Who it's for (3 cards)                      ├─ Explanation quote (+ forecast-missed badge)
+├─ Statement: "It plans. It explains…"         ├─ Cards: Battery (gauge + BMS) · Safety & power-cut events · Session impact
+├─ FAQ (7)                                     ├─ Operator panel · What-if panel
+├─ Live-demo CTA                               ├─ Comparison vs fixed rule (+ CSV)
+└─ Footer: SIH · SDG 7 · Open-Meteo ·          ├─ Power-mix history chart · History report (modal)
+   GitHub · Privacy · Credits                  └─ Footer: pipeline · Open-Meteo · Privacy
 
 Privacy & Disclaimer (#/privacy; #/credits scrolls to Credits & licences)
 ```
 
-Single-page app; `App.jsx` switches `landing` ↔ `dashboard`, and shows the Privacy & Disclaimer page when the hash is `#/privacy` or `#/credits` (browser Back returns to the view it was opened from). The dashboard and privacy page are lazy-loaded. Browser back does not switch views (acceptable for MVP; Planned: hash route `#/dashboard` so links and back work). Each view sets its own page title ("Surya Saarthi — AI for solar microgrids" / "Dashboard · Surya Saarthi"). Both views start with a keyboard-only "Skip to content" link. Link previews use `public/og-image.png` (1200×630) via Open Graph / Twitter tags in `index.html`.
+`App.jsx` switches landing ↔ dashboard; `#/privacy` and `#/credits` show the Privacy page (Back returns to where it was opened). Dashboard, Privacy and the 3D scene are lazy-loaded.
 
 ## 4. Screens
 
 ### 4.1 Landing — Done
-| Section | Content | Notes |
-|---|---|---|
-| Nav (sticky) | Brand dot + "Surya Saarthi" (name, tagline, SIH ID and team name live in `src/brand.js`); *GitHub* (ghost); *Open dashboard* (outline) | Backdrop blur, hairline bottom border |
-| Hero | Badge "SDG 7 · Affordable & Clean Energy"; H1 "The sun doesn't send an invoice. Many microgrids waste it anyway."; plain-language sub-line; liquid-glass CTA *See it decide →*; scroll cue | WebGL background at 60% opacity (lazy, hidden for reduced motion) |
-| Results strip | 4 tiles from `src/data/results-summary.json` (written by `run_scenarios.py`): cost reduction range, grid reduction range, ₹ saved/day vs rules, essential-load outages; note line with method | Hidden while the summary has no scenarios, so unvalidated numbers never show |
-| The problem | Eyebrow, H2 statement ("Many rooftop and campus solar systems…"), two paragraphs (PM Surya Ghar; 2023 ToD rules: solar hours at least 20% cheaper, peak 10–20% costlier, set by each state; we assume 20%) | Claims stay hedged ("many", "often"); no unsourced comparisons |
-| How it decides | Six numbered rows: Sense, Check forecast, Allocate, Safety limits, Apply, Report | Reveal on scroll |
-| What it manages | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
-| Who it's for | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
-| Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph ending "The model suggests; the rules decide." | Centered |
-| FAQ ("Questions judges ask") | Six native `<details>` items: real data?, AI mistakes?, internet?, better than today?, cost?, real equipment? | Keyboard-accessible, + / × indicator |
-| Live-demo CTA | Eyebrow, H2, *Start live session →* over animated waves | Dark radial panel behind text for contrast |
-| Footer | Name, tagline, SIH line, SDG 7; links: *Weather data by Open-Meteo.com* (required CC BY 4.0 attribution), *Source on GitHub*, *Privacy & Disclaimer*, *Credits & licences* | Mono, small; links wrap on phones |
-
-### 4.3 Privacy & Disclaimer — Done
 | Section | Content |
 |---|---|
-| Nav | Brand; *← Back* (outline) |
-| Header | "Last updated" eyebrow, H1, one-line lead |
-| What is stored | Session ID in sessionStorage (cleared on tab close); in-memory server session (100 most recent, lost on restart); server cycle log (numbers + reasoning, no ID); no personal details asked |
-| What is sent where | Browser → Render; Render → Groq (simulated numbers only); Render → Open-Meteo (fixed site coordinates); host access logs (Vercel, Render); nothing loaded from Google or other third parties |
-| No cookies, no tracking | No cookies, analytics, ads, pixels or fingerprinting |
-| This is a simulation | Simulated site and demand; assumptions in README; savings are simulation results; not for real equipment |
-| No warranty | "As is"; no liability to the extent the law allows. No contact line (by decision) |
-| Credits & licences (`#credits`) | Open-Meteo, CEA CO₂ database, gpt-oss-20b, fonts (OFL), Lucide (ISC), UI and server packages, adapted 21st.dev components; link to `THIRD_PARTY_NOTICES.md` |
-
-Skip link moves focus to `<main>` directly (a normal `#anchor` would change the route). Update "Last updated" in `Privacy.jsx` whenever data handling changes.
+| Hero | H1 "The sun doesn't send an invoice. Many microgrids waste it anyway."; sub-line (solar, battery, grid and diesel planned together; English or Hindi); CTA *See it decide →*; WebGL background only if WebGL exists and motion is allowed |
+| Results strip | From `results-summary.json` (`benchmark.py`): % lower cost grid normal; % lower with a daily 3-hour cut; diesel optimizer vs fixed rule; safety overrides; note: simulated, recorded Delhi weather, illustrative cuts, placeholder prices |
+| The problem | Fixed rules, ToD prices (at least 20% cheaper in solar hours, peak 10–20% costlier by state; we assume 20%), power cuts → genset |
+| How it decides | Sense · Check forecast · Decide · Safety and battery limits · Apply · Explain and report |
+| What it manages | Solar panels · Battery · Grid · Diesel genset · Water pump · EV charging |
+| Who it's for | Homes with solar and backup · Schools, clinics and small businesses · Village and farm mini-grids |
+| Statement | "It plans. It explains. It cannot override the safety rules." + optimizer/AI roles |
+| FAQ | Real data? · Why an optimizer and an AI? · Better than today's controllers? (numbers from the benchmark file) · Wrong decision? · Internet? · Cost? · Real equipment? |
+| Footer | SIH line, SDG 7, Open-Meteo attribution, GitHub, Privacy, Credits |
 
 ### 4.2 Dashboard — Done
 | Region | Content | Behaviour |
 |---|---|---|
-| Header (sticky) | Outlined group `role="group"` "Simulate whole days": scenario select (from `/scenarios`), days input (1–7), *Simulate N days* (secondary, tooltip; label follows the days input). Then *← Overview*, *History report*, *Reset session* (tooltip), *Run 1 hour* (primary, tooltip) | The group keeps the multi-day controls visibly separate from the one-hour button. Below 640 px the "days" text is hidden (the button already says it). Status dot: grey idle, pulsing solar while computing, battery-green when a state exists. Controls disabled while a simulation runs. |
-| Progress bar | "Simulating {scenario}… i/N hours", bar, latest status line (solar, grid, forecast missed, reasoning) | Only while simulating |
-| Intro | Badge "Live agent · SDG 7 · Clean energy", H1, sub-line, pipeline stepper, caption | Stepper: pending/active/done per stage; "forecast missed: cautious" on Allocate when flagged |
-| Situation panel | 4 tiles: **Time** (HH:00, Day n · scenario), **Sunlight** (kW now; "forecast said X kW" — red + "so it plans cautiously" when miss > 1 kW), **Grid price** (₹/kWh; band text coloured: solar hours = battery, peak = grid, normal = muted), **Demand** (essential kW; jobs running · waiting) | 2 columns on mobile, 4 on desktop |
-| Legend + energy flow | Solar / Battery / Grid (last resort) legend; SVG with three source nodes, load node, animated dashed paths (width ∝ kW), solar→battery arc when charging ("kW in"), "↑ exporting X kW" under Grid | Dimmed node when ≈ 0 kW; count-up numbers |
-| Deferred strip | "Deferred this cycle" + chips "ev charging (21:00) · until 06:00" | Only if any deferred |
-| Reasoning | Quoted sentence; red "Forecast missed by X kW — planned cautiously" badge when applicable; fixed-rule hours say so in the sentence | |
-| Cards row | **Battery reserve** (ring gauge, red ≤ 22%) · **Safety overrides this cycle** (list, or "No overrides triggered…") · **Session impact** (₹ saved vs grid-only, kg CO₂ avoided, cycles run) | 1 column mobile, 3 desktop |
-| Agent vs rule-based | Two bars (agent vs rules grid kWh); stats: % less grid, ₹ saved vs rules, renewable share, overrides/AI-fallback hours; second row: solar generated, self-use % (rules in caption), exported kWh, wasted kWh; *Download results (CSV)* | Appears after the first cycle |
-| History chart | Three lines (solar, battery, grid) for last 20 cycles; hover line + tooltip; ring marker on forecast-miss hours | |
-| History modal | Newest first: cycle, timestamp, forecast-missed badge, metrics, reasoning, alerts; *Download log (.txt)* | Scrollable, max 82vh |
+| Header | Simulate-days group, Overview, History report, Reset session, *Run 1 hour* | "More" menu below 640 px |
+| Intro | H1 "Every hour, it plans the next 24."; **Decides:** Optimizer / AI (LLM) / Fixed rule (radiogroup, one-line description of the mode); **English / हिंदी** (radiogroup, remembered in localStorage); stepper Sense → Decide → Safety check → Apply → Report | Controller switches from the next hour |
+| Situation panel | Time · Sunlight (vs forecast; red when missed) · Grid price, or **Power cut** with genset kW · Demand (essential, jobs running/waiting) | 2 columns on phones |
+| 3D energy scene | Solar array + sun · battery cabinet (charge bar) · transmission tower · diesel genset · house; particle flows; HTML labels (name, value, sub-line) | See §6.1 |
+| Explanation | Quote in the chosen language (Hindi only in optimizer mode; note otherwise); forecast-missed badge | |
+| Cards | **Battery**: gauge + health, temperature, charge/discharge limits · **Safety and power-cut events** · **Session impact** (₹ saved vs no solar or battery; CO₂) | |
+| Operator panel | Note input + examples → interpretation (EN/HI, "Read by the AI / rule-based parser") → Apply / Cancel; active constraints with Clear; BMS test buttons (overheating, lost sensor, clear) | Nothing applies until confirmed |
+| What-if panel | Sun %, battery health %, evening peak price, extra load, power cut (from/to), DISCOM limit (from/to/max) → table Now / What-if (optimizer) / What-if (fixed rule) × cost (battery charge left counted), grid, diesel, unserved, lowest battery; battery-level chart | No AI calls |
+| Comparison | Grid bars; % less grid, ₹ saved vs fixed rule (incl. wear, diesel), renewable share, overrides / AI fallback; solar row; power-cut hours, diesel, unserved, battery wear; CSV | |
+| History | Chart (last 20 hours) and modal log | |
+
+### 4.3 Privacy & Disclaimer — Done
+What is stored · What is sent where (Groq: simulated numbers in AI mode and the text of operator notes; Open-Meteo: site coordinates) · No cookies/tracking · Simulation disclaimer · No warranty · Credits & licences (incl. SciPy/NumPy/HiGHS, three.js, fonts, icons, adapted components).
 
 ## 5. Key user flows
 
-**F1 — Run one cycle**
-1. Click *Run 1 hour* → button shows "Computing…", stepper animates Sense → Allocate → Safety → Apply (≈ 420 ms each).
-2. Response arrives → if the forecast missed, Allocate shows "forecast missed: cautious" until the next hour (no loop to animate: the check happens before the decision).
-3. Stepper lands on Report; all regions update; totals add this cycle.
+**F1 — Run one hour:** *Run 1 hour* → stepper animates → state arrives → scene, panel, explanation, cards update.
 
-**F2 — Run a simulation**
-1. Pick scenario and days → *Simulate N days* (label follows the days box).
-2. Session resets; progress bar appears; each hour updates every region live.
-3. Finish → progress bar disappears; comparison card shows the full-run result.
-4. Error mid-run → loop stops, error banner shows, completed hours remain.
+**F2 — Tell it about a power cut:** type note → *Understand* → check interpretation → *Apply* → constraint listed → run or simulate; battery fills before the cut; genset runs only if needed.
 
-**F3 — Refresh / return**
-1. Reload the page → same tab keeps its session id → dashboard restores state, chart, totals and scenario.
+**F3 — Simulate:** *Simulate N days* resets (keeping constraints at the same time of day) and runs N × 24 hours with live progress.
 
-**F4 — Export**
-1. *Download results (CSV)* (comparison card) or *History report → Download log (.txt)*; both use `?session=` links.
+**F4 — What-if:** set changes → *Run what-if* → table and chart; session unchanged.
 
-**F5 — Saved results (Planned)**
-1. *Load saved results* next to *Simulate N days* → choose scenario → dashboard renders the pre-computed run instantly, labelled "Saved run", with no AI calls.
+**F5 — Compare controllers:** switch *Decides:* and run the same hours; the comparison card always compares against the fixed rule.
+
+**F6 — Test safety:** *Simulate overheating* → next hour the battery is isolated and the events card says why → *Clear fault*.
 
 ## 6. Components
 
-| Component | File | Props / variants |
+| Component | File | Notes |
 |---|---|---|
-| Button | `components/ui/button.jsx` (Base UI) | `variant`: default, secondary, outline, ghost, destructive; `size`: sm, default; links via `render={<a/>}` + `nativeButton={false}` (never `asChild`) |
-| LiquidButton | `components/ui/liquid-glass-button.jsx` | Landing CTAs only, `size="xl"` |
-| Tooltip | `components/ui/tooltip.jsx` | Trigger uses `render={<Button …/>}` so no nested buttons |
-| Card | `components/ui/card.jsx` | Header/Title/Description/Content |
-| Badge | `components/ui/badge.jsx` | outline (mono, uppercase), destructive |
-| Dialog | `components/ui/dialog.jsx` | History modal |
-| PipelineStepper | `PipelineStepper.jsx` | `stepIndex` −1…4, `replanFlash` |
-| SituationPanel | `SituationPanel.jsx` | `state`, `scenarioLabel` |
-| EnergyFlow | `EnergyFlow.jsx` | `solarKw, batteryKw (neg = charging), gridKw, exportKw, criticalKw, flexibleLoads, loading` |
-| BatteryGauge | in `Dashboard.jsx` | `pct` |
+| EnergyView | `EnergyView.jsx` | Chooses 3D or flat; screen-reader summary (`role="img"`); deferred-jobs strip |
+| EnergyScene3D | `EnergyScene3D.jsx` | three.js scene; props: solarGenKw, solarKw, batteryKw, gridKw, exportKw, gensetKw, unservedKw, gridAvailable, loadKw, socPct |
+| EnergyFlow | `EnergyFlow.jsx` | Flat SVG fallback (genset replaces grid in a cut) |
+| webgl helpers | `webgl.jsx` | `hasWebGL()`, `FallbackBoundary` |
+| OperatorPanel | `OperatorPanel.jsx` | `lang` |
+| WhatIfPanel | `WhatIfPanel.jsx` | `lang` |
+| SituationPanel | `SituationPanel.jsx` | `state`, `decision`, `scenarioLabel` |
 | ComparisonCard | `ComparisonCard.jsx` | `comparison`, `csvUrl` |
-| HistoryChart | `HistoryChart.jsx` | `history[]` {cycle, solar, battery, grid, replanned} |
-| HistoryModal | `HistoryModal.jsx` | `open`, `onOpenChange` |
+| PipelineStepper, HistoryChart, HistoryModal, ConfirmDialog, MoreMenu | as named | |
+| UI primitives | `components/ui/*` | Base UI / shadcn-style; links via `render={<a/>}` |
+
+### 6.1 3D energy scene
+- Layout: solar array (back-left, tilted towards the viewer, with a sun whose size/brightness follows output), tower (back-centre, wires leaving the scene), battery cabinet (centre, charge bar), genset (front-left), house (right).
+- Flows: particles along curved conduits to the house (solar, battery, grid, genset), plus solar→battery, solar→grid (export), genset→battery; count, size and speed grow with kW.
+- States: night = dimmer, bluish light, no sun; power cut = dark tower, blinking red beacon, genset vibrating with smoke and a green lamp; unserved load = flickering windows.
+- Camera drifts slowly; narrower screens step back and aim right so the house stays in view.
+- Labels are HTML (crisp, themed), positioned from the 3D anchors every frame, above the canvas.
 
 ## 7. Interactions and motion
 
-- Numbers count up over 600 ms (ease-out cubic); disabled for `prefers-reduced-motion`.
-- Energy-flow dashes animate only on active paths (> 0.05 kW); whole diagram dims slightly while computing.
-- Landing sections fade/slide in once on scroll (0.8 s); disabled for reduced motion.
-- Hover: buttons lighten; chart shows a vertical guide and tooltip for the nearest cycle.
-- Tooltips on *Run 1 hour*, *Simulate N days* and *Reset session* explain the action (200 ms delay).
+- Count-up numbers (600 ms) and landing reveals; all off with reduced motion.
+- 3D scene: continuous animation normally; with reduced motion a single still render per update; paused when off-screen or the tab is hidden.
+- Tooltips on the header actions (200 ms).
 
 ## 8. Forms and inputs
 
 | Control | Rules |
 |---|---|
-| Scenario select | `<label>` "Weather scenario" (visually hidden) tied by `id="scenario-select"`; options from `/scenarios`; defaults to server default; disabled while simulating; option text dark on light for native dropdown readability |
-| Days | `<label>` "Days to simulate (1 to 7)" (visually hidden) tied by `id="sim-days"`; number input 1–7; clamped on change; visible "day/days" text is `aria-hidden` so it isn't read twice |
-
-No free-text inputs in the MVP.
+| Scenario select, days | Labelled (`#scenario-select`, `#sim-days`); days 1–7 |
+| Controller, language | `role="radiogroup"` with `role="radio"` buttons and `aria-checked` |
+| Operator note | Labelled `#operator-note`; ≤ 300 chars; example chips fill it |
+| What-if | Labelled sliders, selects and checkboxes; server validates ranges |
 
 ## 9. States
 
 | Region | Loading | Empty | Error |
 |---|---|---|---|
-| Dashboard (no session yet) | — | "Nothing has run yet. Press Run 1 hour to watch one decision step by step, or Simulate to play whole days at once." | Red bordered banner with message from `errorMessage()` |
-| Run 1 hour | Button "Computing…", status dot pulses, stepper animates | — | Banner; stepper stays; previous data kept |
-| Simulation | Progress bar with hour i/N and status line | — | Banner; completed hours kept |
-| Safety overrides card | — | "No overrides triggered — the proposed allocation stayed within every limit." | — |
-| History chart | — | "Run a few cycles to see the trend build up here." | — |
-| History modal | "Loading…" | "No cycles logged on the server yet." | "Can't reach the backend to load history." |
-| Scenario list | Built-in default shown | — | Silent fallback to default |
-
-Error copy: network → "Can't reach the backend at {URL}. Make sure uvicorn main:app is running."; HTTP error → "The backend returned an error ({status}). Check the server log."
+| Dashboard | Stepper animates | "Nothing has run yet…" | Red banner with the server's message (e.g. rate limit) |
+| 3D scene | Flat diagram while loading | — | Flat diagram (no WebGL / failure) |
+| Operator panel | Button "…" | "No power cuts, targets or grid limits set." | Message under the input (e.g. "Couldn't find a power cut…") |
+| What-if | "Running…" | Controls only | Message under the button |
+| Events card | — | "Nothing to report — the plan stayed within every limit." | — |
 
 ## 10. Responsive behaviour
 
-| Breakpoint | Behaviour |
+| Width | Behaviour |
 |---|---|
-| ≥ 768 px (`md`) | Situation panel 4 columns; cards row 3 columns; comparison stats 4 columns |
-| < 768 px | Situation panel and comparison stats 2 columns; cards stack; header controls wrap (3 rows at 390 px) |
-| 390 px (reference phone) | No horizontal scroll (verified); SVGs scale by `viewBox` |
-
-Below 640 px the header is two rows (brand; controls) and Overview / History report / Reset session move into a **More** menu (Done; closes on outside click or Escape).
+| ≥ 1024 px | Operator and what-if panels side by side; 3D scene up to 1040 px wide |
+| < 1024 px | Panels stack |
+| < 640 px | Header "More" menu; 3D scene 4:3.6 with smaller labels (sub-lines hidden) |
+| 390 px | No horizontal scroll (verified) |
 
 ## 11. Accessibility
 
-- Semantic buttons/links only; no nested interactive elements (verified: 0).
-- Visible focus ring (`--ring` = battery green).
-- Body text contrast ≥ 4.5:1 (muted `#8b8f94` on `#0e0f10` ≈ 5.8:1).
-- Energy flow has `aria-label`; stepper is `role="list"`. Planned: text alternative listing kW values under the SVG for screen readers.
-- Colour is never the only signal: overrides are text, forecast misses have a badge, price band has a label.
-- `prefers-reduced-motion` respected (backgrounds hidden, no count-up, no reveal).
-- Hit targets ≥ 32 px high for header buttons.
-- Every form control has a programmatic label (checked with an accessibility-tree snapshot: `combobox "Weather scenario"`, `spinbutton "Days to simulate (1 to 7)"`).
-- Footer links reachable by Tab with a visible focus style; Enter opens the privacy page.
+- Semantic controls; radiogroups for the switches; labelled inputs; visible focus ring.
+- 3D scene: canvas `aria-hidden`; the wrapper has a one-sentence summary of the power flows; labels duplicate text visually only.
+- Reduced motion respected everywhere (landing backgrounds skipped, still 3D scene).
+- Body text contrast ≥ 4.5:1; colour never the only signal (power cut, BMS and overrides are text).
+- Hindi text marked `lang="hi"` on the explanation.
 
 ## 12. Visual design
 
-### Colours (tokens in `src/index.css`)
 | Token | Value | Use |
 |---|---|---|
 | `--background` | `#0e0f10` | Page |
-| `--card` | `#16181a` | Cards, panels, SVG nodes |
-| `--foreground` | `#f2f0ec` | Primary text, primary button |
-| `--muted-foreground` | `#8b8f94` | Secondary text, labels |
-| `--border` | `rgba(255,255,255,0.08)` | Hairlines |
-| `--secondary` | `rgba(255,255,255,0.06)` | Inputs, subtle fills |
-| `--solar` | `#ffb648` | Solar values, export |
-| `--battery` / `--accent` / `--ring` | `#4fd8c4` | Battery, positive results, eyebrows, focus |
-| `--grid` / `--destructive` | `#ff6b5c` | Grid import, peak price, errors, forecast misses |
+| `--card` | `#16181a` | Cards |
+| `--foreground` | `#f2f0ec` | Primary text |
+| `--muted-foreground` | `#8b8f94` | Secondary text |
+| `--solar` | `#ffb648` | Solar, export |
+| `--battery` | `#4fd8c4` | Battery, positive results, focus |
+| `--grid` | `#ff6b5c` | Grid import, peak price, errors, power cut |
+| `--genset` | `#b99cff` | Diesel genset |
 
-### Typography
-| Role | Font | Size |
-|---|---|---|
-| Display (H1–H3, big numbers) | Space Grotesk 500–600 | H1 `clamp(2rem, 4.5vw, 3.4rem)` dashboard / `clamp(2.2rem, 5.5vw, 4.2rem)` landing; stats 1.5rem |
-| Body | Inter 400–500 | 0.95–1.1rem, line-height 1.6–1.7 |
-| Labels, eyebrows, data | JetBrains Mono | 0.65–0.75rem, uppercase, tracking 0.04–0.12em |
-
-Fonts are self-hosted variable fonts from Fontsource (`@fontsource-variable/space-grotesk`, `inter`, `jetbrains-mono`, imported in `main.jsx`; CSS families "Space Grotesk Variable" etc.). The site makes no requests to Google Fonts. All three are SIL Open Font License 1.1.
-
-### Spacing and shape
-- Base unit 4 px (Tailwind scale). Section padding `clamp(60px, 10vw, 120px)` landing; dashboard content max-width 48rem (intro) / 72rem (cards).
-- Radius `--radius` 0.75rem (cards), `rounded-lg` tiles, pills for badges and landing CTAs.
-- Cards separated by 1 px hairline gaps (`gap-px` on `bg-border`).
+Fonts: Space Grotesk (display), Inter (body), JetBrains Mono (labels) — self-hosted via Fontsource (OFL 1.1).
 
 ## 13. Copy guidelines
 
-- Say what happened and why in one sentence ("Solar is unavailable, battery supplies critical load…").
-- Always name the baseline for a saving ("vs grid-only", "vs rule-based").
-- Use "essential load" in UI (not "critical" in headings), "flexible jobs", "sunlight", "grid price".
-- Label simulated inputs ("simulated demand profile").
+- Say what happened and why ("Storing 3.1 kW of spare sunshine… Why: planning to have the battery at about 100% when the power cut starts at 19:00").
+- Always name the baseline for a saving.
+- "Essential load", "flexible jobs", "power cut", "genset", "sunlight".
+- Label simulated inputs, illustrative cuts and placeholder prices.
+- Hindi: simple, everyday words (बिजली कटौती, बैटरी, जनरेटर, धूप).

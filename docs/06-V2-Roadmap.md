@@ -4,6 +4,7 @@
 |---|---|
 | Started | 27 Sep 2026, from the SIH `sih-improvements` branch (commit `e4006ec`) |
 | Location | `Documents/surya-saarthi-v2`, branch `main`, no remote yet |
+| Context for new chats | [`MEMORY.md`](../MEMORY.md) (loaded via `CLAUDE.md`) |
 | SIH copy | `Documents/microgrid-agent-sih` is left untouched |
 
 ## Positioning
@@ -47,6 +48,7 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 | Grounded explanations EN/HI | ✅ | Templated from the plan's numbers, rewritten after the safety check from what was applied (`explain.py`). LLM phrasing + truthfulness checker **not done** (templates are true by construction) |
 | Software BMS | ✅ partly | Pack-level live limits, temperature derating/cut-off, health, fault injection (`bms.py`). **Not done:** cell-level model, Kalman-filter SOC, BLAST-Lite wear (simple throughput model instead) |
 | What-if panel | ✅ | Sun, power cut, battery health, peak tariff, extra load, DISCOM limit; no AI calls (`whatif.py`, `WhatIfPanel.jsx`) |
+| 3D energy scene | ✅ | three.js site (solar + sun, battery with charge bar, tower, genset, house, particle flows, labels); flat fallback; still under reduced motion (`EnergyScene3D.jsx`, `EnergyView.jsx`) |
 | Demand response | ✅ | Grid-import caps in the optimizer (notes or what-if); measured against the same day without the cap in what-if |
 
 ### Phase 3 — Credibility and delivery ⬜ mostly open
@@ -60,12 +62,24 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 | Deploy v2, deck, video, paper | ⬜ needs the GitHub decision |
 | Stakeholder interviews | ⬜ team |
 | Multi-site coordination, attack detection | ⬜ cut (as planned) |
+| Landing page blank without WebGL (bug from v1) | ✅ fixed in v2 (`webgl.jsx`); **still present in the SIH repo / live site** |
 
 ## Open decisions (team)
 
-1. Next SIH deadline (sets how much of Phase 1 comes before the deck).
-2. GitHub: a new repository for v2, or a branch in the existing one.
-3. Budget for testbed parts and/or Groq's paid tier.
+1. Next SIH deadline (sets whether the deck/submission text comes before the remaining technical items).
+2. GitHub: a new repository for v2, or a branch in the existing one (nothing pushed yet).
+3. Deploy v2? (Render: `PYTHON_VERSION=3.12`, `FRONTEND_ORIGINS`, AI budget.)
+4. Real prices to replace placeholders: battery ₹/kWh and cycle life, diesel ₹/L, genset kWh/L, export credit.
+5. Budget for testbed parts and/or Groq's paid tier.
+6. Fix the no-WebGL blank-page bug in the SIH repo too?
+
+## Next (suggested order)
+
+1. Real prices → rerun `python benchmark.py` (≈ 2 min; landing updates itself).
+2. Deck results slide + SIH submission text (title, description, abstract) from `docs/07`.
+3. Bigger AI sample (~5 more days, spread over days for the Groq quota).
+4. Outage likelihood from Prayas ESMI data; logins on control endpoints; 400/404 codes (SRS FR-API4).
+5. ESP32 testbed + twin sync (team hardware).
 
 ## Do not claim
 

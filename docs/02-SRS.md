@@ -2,27 +2,30 @@
 
 | | |
 |---|---|
-| Version | 1.0 (MVP) |
-| Scope | Backend API (FastAPI + LangGraph agent) and web frontend (React) in this repository |
-| Related | [01-PRD](01-PRD.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [05-Development-Plan](05-Development-Plan.md) |
+| Version | **v2** (27 Sep 2026) |
+| Scope | Backend API (FastAPI + LangGraph + optimizer) and web frontend (React) in this repository |
+| Related | [01-PRD](01-PRD.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [06-V2-Roadmap](06-V2-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
 
-**Conventions.** Each requirement has an ID, a "shall" statement, and a way to test it. **Status** is `Done` (implemented in the current build; tests named in *Test* either exist in `backend/test_*.py` or are the manual check to run) or `Planned` (required for MVP sign-off, not yet built). Units: kW (power), kWh (energy), ₹ (rupees), % SOC (battery state of charge). One cycle = one simulated hour (`CYCLE_HOURS = 1.0`).
+**Conventions.** Each requirement has an ID, a "shall" statement and a test. **Status**: `Done` (implemented; the named test exists in `backend/test_*.py` or is the manual check) or `Planned`. Units: kW, kWh, ₹, % SOC. One cycle = one simulated hour. All tunables are in `backend/config.py`.
+
+Offline test files: `test_cycle_accounting.py`, `test_safety_rules.py`, `test_optimizer.py`, `test_features.py`, `test_allocation_parsing.py`, `test_sessions.py` (no Groq, no network).
 
 ---
 
 ## 1. Overview
 
-The system simulates a microgrid (solar, battery, grid, essential load, flexible loads) hour by hour. Each hour an AI agent proposes how to meet demand; a deterministic safety layer corrects the proposal; the result is applied and reported, and compared with a fixed-rule controller fed identical inputs. A web dashboard lets viewers run and inspect the simulation.
+The system simulates a site (solar, battery, grid, diesel genset, essential load, flexible jobs) hour by hour. Each hour a controller — the **optimizer** (default), the **AI** (LLM) or the **fixed rule** — proposes a dispatch; a deterministic plant model and safety layer (with a software BMS) corrects it; the result is applied, explained and reported, and compared with the fixed rule run on identical conditions. Operators can add power cuts, battery targets and grid limits in plain language. A dashboard and a benchmark on recorded weather show the results.
 
-## 2. User roles and permissions
+## 2. User roles
 
-| Role | Description | Permissions |
-|---|---|---|
-| **Viewer** (anonymous) | Anyone who opens the web app | Read landing page; create/own one session per browser tab; run cycles and simulations in that session; reset it; read and download its history. Cannot read or modify other sessions. |
-| **Script user** | Developer calling the API without a session header (curl, tests, `run_scenarios.py`) | Same as Viewer, on the shared `default` session. |
-| **Operator** | Person deploying the service | Sets environment variables (`GROQ_API_KEY`) and `config.py`; reads server logs. No in-app admin UI in MVP. |
+| Role | Permissions |
+|---|---|
+| **Viewer** (anonymous) | One session per browser tab: run hours/simulations, switch controller, add/clear constraints, inject BMS faults (test), run what-ifs, download history. Cannot see other sessions. |
+| **Script user** | Same, on the shared `default` session (curl, tests, `run_scenarios.py`). |
+| **Site controller** (future device) | `GET /plan`; needs `X-Api-Key` when `DEVICE_API_KEY` is set. |
+| **Operator** | Environment variables and `config.py`; server logs. No admin UI. |
 
-There are **no user accounts** in the MVP. Isolation is by session id, not identity.
+No user accounts. Isolation is by session id.
 
 ## 3. Functional requirements
 
@@ -30,198 +33,201 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 
 | ID | Requirement | Test | Status |
 |---|---|---|---|
-| FR-S1 | The system shall obtain hourly shortwave irradiance (W/m²) for `config.LATITUDE/LONGITUDE` from Open-Meteo, covering 8 days. | Call `fetch_hourly_irradiance()`; length ≥ 192 | Done |
-| FR-S2 | If the weather API fails, the system shall use a clear-sky bell curve (0 at night, peak 850 W/m² at noon) and continue. | Block network; cycle completes; log shows fallback message | Done |
-| FR-S3 | Cached irradiance older than 6 hours shall be re-fetched when a run starts (reset/simulate), never mid-run. | Set fetched-at to 7 h ago; reset; cache cleared | Done |
-| FR-S4 | Solar power (kW) shall be `SYSTEM_CAPACITY_KW × irradiance / 1000`, rounded to 0.01. | 500 W/m² → 5.0 kW | Done |
-| FR-S5 | Forecast for the current hour = irradiance × scenario multiplier; actual = forecast × noise, noise ~ N(1, variability) clipped to [0.1, 1.25]. | Sample 1,000 hours; mean ≈ 1, bounds respected | Done |
-| FR-S6 | The system shall provide the next 8 hours of solar forecast (`solar_forecast_next_hours`) and set `forecast_solar_kw` to its first element. | Length 8; first element equals `forecast_solar_kw` | Done |
-| FR-S7 | Essential load (kW) shall follow the 24-value daily profile × U(0.9, 1.1). | Hour 19 value within 3.8 × [0.9, 1.1] | Done |
-| FR-S8 | A water-pump job (1.5 kW, deadline 10:00) shall arrive each hour 06–09; an EV job (3.0 kW, deadline 06:00) each hour 18–22. Job names include the start hour, e.g. `water_pump (07:00)`. | Hour 7 → one pump job named with 07:00 | Done |
-| FR-S9 | Jobs deferred last hour shall carry forward; a job with ≤ 1 hour to its deadline (modulo 24) shall be flagged `must_run`. | EV deferred at 22:00 → `must_run` false at 23:00, true at 05:00 | Done |
-| FR-S10 | Grid price shall be ₹8 × multiplier by hour: 09–16 ×0.8 ("solar hours"), 18–21 ×1.2 ("peak"), else ×1.0 ("normal"); `price_band` carries the label. (Solar hours are at least 20% cheaper; the peak surcharge is 10–20%, set by each state; we assume 20%.) | Hours 3/10/19 → 8.0/6.4/9.6 and normal/solar hours/peak | Done |
-| FR-S11 | Battery SOC shall start at `INITIAL_BATTERY_SOC_PCT` (60%) for a new session; capacity 10 kWh. | First `/cycle` after reset senses SOC 60 | Done |
+| FR-S1 | Live mode shall fetch hourly shortwave irradiance and air temperature for the site from Open-Meteo (8 days) and cache them. | `fetch_hourly_irradiance()` length ≥ 192 | Done |
+| FR-S2 | If the weather API fails, a clear-sky curve and 30 °C shall be used and the run continues. | Offline tests use it | Done |
+| FR-S3 | A cache older than 6 h shall be re-fetched when a run starts, never mid-run. | Code review | Done |
+| FR-S4 | Solar AC output = capacity × GHI/1000 × (1 − 14% losses) × (1 − 0.4%/°C above 25 °C cell temperature, NOCT model) × 96% inverter, capped at the 10 kW inverter. | `test_safety_rules.py` 10b (1000 W/m², 25 °C → 7.22 kW; never > 10 kW) | Done |
+| FR-S5 | Live mode: forecast = weather × scenario multiplier; actual = forecast × N(1, variability) clipped to [0.1, 1.25], keyed on (seed, hour). | 9c (same seed → same values) | Done |
+| FR-S6 | Recorded mode (`weather_source`): actual and day-ahead forecast come from `data/weather_delhi.json`. | `benchmark.py` | Done |
+| FR-S7 | A 23-hour solar forecast shall be provided (`solar_forecast_next_hours`); the LLM prompt uses the first 8. | Optimizer tests | Done |
+| FR-S8 | Forecast correction (optional, `FORECAST_CORRECTION`, default off) blends the recent actual/forecast ratio into the next hours. | `benchmark.py` MAE comparison | Done (off: measured not to help) |
+| FR-S9 | Essential load = daily profile × U(0.9, 1.1) (+ `extra_load_kw` in what-ifs). Pump jobs (1.5 kW, due 10:00) arrive 06–09; EV jobs (3 kW, due 06:00) 18–22. | Case 8 | Done |
+| FR-S10 | Deferred jobs carry forward; a job with ≤ 1 h to its deadline is `must_run`. | Case 8 | Done |
+| FR-S11 | Price = ₹8 × 0.8 (09–16), × 1.2 (18–21, or `peak_multiplier`), else × 1.0; `price_band` labels it. | Code + UI | Done |
+| FR-S12 | `grid_available` is false during any `[start, end)` outage window. | `test_features.py` 3 | Done |
+| FR-S13 | The BMS publishes limits for this hour from SOC, health and temperature (FR-B1–B4); battery capacity = 10 kWh × health. | Case 13 | Done |
+| FR-S14 | Forecast check: `forecast_miss_kw` = actual − last hour's forecast for this hour; `replanned` when \|miss\| > 1 kW, before deciding. | 9b; `test_cycle_accounting.py` | Done |
 
-### 3.2 AI allocation
-
-| ID | Requirement | Test | Status |
-|---|---|---|---|
-| FR-A1 | The system shall send the LLM the scenario, hour, solar now, 8-hour solar forecast, battery SOC and capacity, essential load, flexible jobs (power, deadline, `must_run`), current price and next 8 hours of prices. | Inspect prompt in a unit test | Done |
-| FR-A2 | The LLM response shall be requested as JSON matching a strict schema: `solar_used_kw`, `battery_used_kw` (negative = charging), `grid_used_kw`, `defer_loads[]`, `reasoning`. | Schema in `DECISION_RESPONSE_FORMAT` | Done |
-| FR-A3 | A response shall be rejected if any power value is missing, non-numeric, boolean or non-finite; if `defer_loads` is not a list of strings; if `reasoning` is empty; or if it defers an unknown job. | `test_allocation_parsing.py` | Done |
-| FR-A4 | JSON wrapped in code fences or prose shall be extracted before validation. | Fenced JSON accepted | Done |
-| FR-A5 | Rate-limit (429), malformed-JSON and 503/timeout errors shall be retried up to `LLM_MAX_ATTEMPTS` (4), waiting the delay stated in the 429 message (+0.25 s, max 20 s) or exponential back-off. | Fake LLM raising 429 twice then succeeding → decision used | Done |
-| FR-A6 | If no valid response is obtained, or the server's AI budget is used up (`ai_blocked_reason`), the system shall use the **fixed rule** (same logic as the rule-based baseline): solar, then battery down to the reserve within the rate limit, then grid; no job deferred. It sets `ai_fallback` and adds an alert starting `AI fallback:`. When the budget is used up the LLM is not called. | `test_allocation_parsing.py`; `test_cycle_accounting.py` (AI off == baseline in all scenarios) | Done |
-| FR-A7 | When the forecast missed (`replanned`), the prompt shall state this hour's actual solar and last hour's forecast for it, and ask the agent to keep more battery in reserve. | `test_apply.py` (live) | Done |
-
-### 3.3 Safety layer (applied after every allocation, in this order)
-
-| ID | Requirement | Test (`test_safety_rules.py` case) | Status |
-|---|---|---|---|
-| FR-SF0 | A `must_run` job listed in `defer_loads` shall be removed from it, with an alert. | Case 5 | Done |
-| FR-SF1 | `solar_used_kw` shall not exceed solar generated (+0.01 tolerance); excess is moved to grid with an alert. | Case 1 | Done |
-| FR-SF2 | Battery discharge shall not exceed `min((SOC − 20%) × capacity / 1 h, 5 kW)`; excess moved to grid with an alert. | Case 2 | Done |
-| FR-SF3 | Battery charging shall not exceed `min(room to 100% / 1 h, 5 kW, surplus solar)`; the battery is never charged from the grid. | Case 6 | Done |
-| FR-SF4 | Supply (solar + discharge + grid) shall be ≥ essential load + non-deferred flexible load; any shortfall is added from grid with an alert. Unused grid import is trimmed. | Cases 3, 4, 7 | Done |
-| FR-SF5 | Surplus solar shall charge the battery up to FR-SF3 limits even if the AI did not ask; `solar_used_kw` remains solar serving load only. | Case 7b | Done |
-| FR-SF6 | Solar left after load and charging shall be exported, capped at `GRID_EXPORT_LIMIT_KW`; any remainder is recorded as curtailed. | Case 7c | Done |
-| FR-SF7 | Differences ≤ 0.01 kW shall not trigger overrides or alerts. | "shifted 0.0 kW" never appears in a 2-day run | Done |
-| FR-SF8 | Battery power of exactly zero shall be reported as `0.0`, never `-0.0`. | Night hours in a run | Done |
-
-### 3.4 Forecast check, apply, report
+### 3.2 Controllers
 
 | ID | Requirement | Test | Status |
 |---|---|---|---|
-| FR-R1 | New SOC = old SOC − battery kW × 1 h / capacity × 100, clamped to [0, 100]. | 60%, 2 kW discharge, 10 kWh → 40% | Done |
-| FR-R2 | Jobs named in `defer_loads` shall be marked `deferred: true`; others `false`. | `test_apply.py` | Done |
-| FR-R3 | Sensing shall compute `forecast_miss_kw` = actual solar − last cycle's forecast for this hour, and set `replanned` ("forecast missed") when its magnitude > 1.0 kW, **before** allocation. Each hour is decided and applied exactly once (the old loop back from apply to allocate applied the battery twice). | `test_safety_rules.py` 9b; `test_cycle_accounting.py` (SOC moves once per hour over 48 h) | Done |
-| FR-R4 | Report shall include: served load (essential + non-deferred jobs), import cost, export credit, net cost, baseline (grid-only) cost, savings, CO₂ avoided (0.71 kg/kWh, export counted as avoided), solar available/self-used/curtailed, deferred jobs, alerts, replanned (forecast-missed) flag and `forecast_miss_kw`. | Case 9, 11 | Done |
+| FR-D1 | The decide step shall use the session's controller: `optimizer` (default), `ai` or `fixed`; `POST /controller` switches it; unknown names are rejected. | `test_sessions.py` | Done |
+| FR-D2 | **Fixed rule**: solar first, then battery down to the reserve within the BMS limit, then grid; all jobs run now. In a power cut: essentials and due jobs only, solar → battery → genset. | Case 10, 12 | Done |
+| FR-D3 | **Optimizer**: a 24-hour MILP minimising grid cost − export credit + battery wear + diesel + penalties (unserved essential ₹1,000/kWh, missed job, missed target) − value of energy left at the end; applies the first hour. | `test_optimizer.py` | Done |
+| FR-D4 | The optimizer shall mirror the plant: solar serves load first; charging only from sun or genset; genset ≥ 30% of rating when on; one-hour jobs once before their deadline, not during cuts except their last hour; SOC within reserve–100% with efficiency; BMS limits; DR import caps; operator SOC targets. | `test_optimizer.py` 1–7 | Done |
+| FR-D5 | The plant shall apply the optimizer's battery decision unchanged (± 0.1 kW) and never override its plans. | `test_cycle_accounting.py` (0 overrides, battery match) | Done |
+| FR-D6 | If the optimizer finds no plan, the fixed rule decides with an "Optimizer fallback" alert. | Code | Done |
+| FR-A1 | **AI**: the prompt shall include scenario, hour, solar now + 8 h forecast, battery, BMS limits, load, jobs, prices (now + 8 h), grid status, scheduled cuts, operator targets. | `test_apply.py` (live) | Done |
+| FR-A2 | The LLM answer uses a strict JSON schema (`solar_used_kw`, `battery_used_kw`, `grid_used_kw`, `defer_loads[]`, `reasoning`) and is validated (numbers finite, known jobs, non-empty reasoning); fenced JSON is extracted. | `test_allocation_parsing.py` | Done |
+| FR-A3 | 429 / malformed / 503 / timeout are retried up to `LLM_MAX_ATTEMPTS` with the delay Groq states or back-off; the daily-token limit is not retried. | Code | Done |
+| FR-A4 | If no valid answer, or the AI budget is used up, the fixed rule decides (`ai_fallback`, alert "AI fallback: …"); when the budget is used up the LLM is not called. | `test_allocation_parsing.py`; AI-off == baseline | Done |
 
-### 3.5 Rule-based comparison
-
-| ID | Requirement | Test | Status |
-|---|---|---|---|
-| FR-C1 | Each cycle shall also run a fixed-rule controller on the same solar, essential load, newly arrived jobs and price: solar → battery to reserve → grid; surplus charges battery then exports; never defers; own SOC starting at 60%. | Case 10 | Done |
-| FR-C2 | The session comparison shall report: hours, grid kWh (agent/rules), grid reduction %, net cost (agent/rules), extra savings, renewable share %, solar generated, self-use % (agent/rules), export kWh (agent/rules), solar wasted, AI-fallback hours, safety-override hours. | `/state` → `comparison` keys present | Done |
-
-### 3.6 Sessions and API
-
-| ID | Requirement | Test | Status |
-|---|---|---|---|
-| FR-API1 | Session id shall be read from header `X-Session-Id`, or query `session` for download links; sanitised to `[A-Za-z0-9_-]`, max 64 chars; empty → `default`. | `test_sessions.py` | Done |
-| FR-API2 | At most 100 sessions shall be kept; the least recently used is evicted. | Create 101 sessions; first is gone | Done |
-| FR-API3 | Requests for the same session shall be processed one at a time (per-session lock). | Two concurrent `/cycle` → cycle numbers 1 and 2, no duplicates | Done |
-| FR-API4 | Endpoints (all JSON unless noted): `GET /health`, `GET /scenarios`, `GET /state`, `POST /cycle`, `POST /simulate {scenario, days}`, `POST /reset {scenario?}`, `GET /history`, `GET /history/csv` (text/csv), `GET /history/download` (text/plain). | See [03-Architecture §5](03-Architecture.md#5-api) | Done |
-| FR-API5 | `POST /simulate` shall reset the session and run `days × 24` cycles, returning summary + all cycles. | 1-day call returns 24 cycles | Done |
-| FR-API6 | Invalid input (unknown scenario, `days` outside 1–7) shall return **HTTP 400** with `{"error": "..."}`. *(Currently returns 200 with the error body.)* | `POST /simulate {"days": 9}` → 400 | **Planned** |
-| FR-API7 | `GET /history/csv` and `/history/download` on an empty session shall return **HTTP 404** with `{"error": "..."}`. *(Currently 200.)* | New session → 404 | **Planned** |
-
-### 3.7 Frontend
+### 3.3 Safety and plant model (every controller, in this order)
 
 | ID | Requirement | Test | Status |
 |---|---|---|---|
-| FR-UI1 | Each browser tab shall create a session id (stored in `sessionStorage`) and send it on every API call. | Two tabs → different ids in request headers | Done |
-| FR-UI2 | On load, the dashboard shall restore state, chart (last 20 cycles), totals and scenario from `/state` and `/history`. | Run 3 cycles, refresh → 3 cycles shown | Done |
-| FR-UI3 | "Run 1 hour" shall animate pipeline steps and mark Allocate "forecast missed: cautious" when the forecast missed. | Visual | Done |
-| FR-UI4 | "Simulate N days" (label follows the days input) shall reset, then call `/cycle` N times, updating progress (hour i/N) and the latest reasoning after each hour. | 1 day → progress reaches 24/24 | Done |
-| FR-UI5 | The situation panel shall show hour + day + scenario, solar now vs forecast (highlight when miss > 1 kW), price + band, essential demand + jobs running/waiting. | Visual at 19:00 → ₹9.60 "Evening peak" | Done |
-| FR-UI6 | The energy flow shall show solar→load, battery→load, grid→load, solar→battery when charging, and "exporting X kW" when exporting. | Noon on sunny day shows charging/export | Done |
-| FR-UI7 | Errors shall distinguish "can't reach the backend" (network) from "backend returned an error (status)". | Stop backend → network message | Done |
-| FR-UI8 | A "Load saved results" option shall display pre-computed results for a scenario without calling the AI. | Offline backend → saved results render | **Planned** |
-| FR-UI9 | The landing page shall show a results strip with numbers taken from `sample_results/`. | Numbers match JSON | **Planned** |
+| FR-SF0 | `must_run` jobs can't be deferred (alert); in a power cut, other flexible jobs are deferred (alert). | Cases 5, 12 | Done |
+| FR-SF1 | Solar serves load first, never more than generated (alert if the proposal claimed more). | Case 1 | Done |
+| FR-SF2 | Discharge ≤ min(energy above the 20% reserve × discharge efficiency, BMS limit), and never more than the remaining load (alert if capped). | Case 2 | Done |
+| FR-SF3 | A proposed genset runs at ≥ 30% of its rating and ≤ its rating. | Case 12 | Done |
+| FR-SF4 | Grid available: the rest comes from the grid (alert if the proposal left load unpowered; unused import trimmed). Power cut: more battery → genset → unserved (alerts). | Cases 3, 7, 12 | Done |
+| FR-SF5 | Spare genset output serves load before the battery does, then charges it. | Case 12 (`tiny`) | Done |
+| FR-SF6 | Surplus sun (then spare genset) charges the battery up to min(room to 100% ÷ charge efficiency, BMS limit); never from the grid. | Cases 6, 7b | Done |
+| FR-SF7 | Leftover sun is exported up to the export limit (grid available) or curtailed (power cut). | Case 7c | Done |
+| FR-SF8 | BMS alarms are added as "BMS: …" alerts; differences ≤ 0.01 kW trigger nothing; zero battery power is `0.0`. | Case 13 | Done |
+
+### 3.4 Battery management (software BMS)
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-B1 | Charging tapers linearly to 0 between 90% and 100% SOC; discharge tapers to 0 between 25% and the reserve. | Case 13 | Done |
+| FR-B2 | Battery temperature ≈ air + 3 °C; limits halved at ≥ 45 °C; battery disconnected at ≥ 55 °C; no charging below 0 °C. | Case 13 | Done |
+| FR-B3 | Health < 80% raises an end-of-life alarm. | Code | Done |
+| FR-B4 | Faults `overtemp` and `sensor_lost` can be injected (`POST /bms/fault`) and isolate the battery. | `test_features.py` 4 | Done |
+
+### 3.5 Apply, report, explain
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-R1 | Battery SOC changes once per hour: discharge removes kW ÷ discharge efficiency; charging adds kW × charge efficiency (92% round trip). | `test_cycle_accounting.py`; case 10b | Done |
+| FR-R2 | Health falls with energy taken out, reaching 80% after 4,000 × 80% full cycles. | Code | Done |
+| FR-R3 | Deferred jobs are marked `deferred`. | Case 8 | Done |
+| FR-R4 | Report: served load, import cost, export credit, battery wear, diesel litres and cost, unserved kW, grid availability, net cost (import − credit + wear + diesel), savings vs a site with no solar/battery (grid, or diesel in a cut), CO₂ (grid and diesel), solar accounting, alerts, forecast-miss fields. | Cases 9, 11 | Done |
+| FR-R5 | Optimizer explanations in English and Hindi are generated from the plan's facts (next cut, battery at the cut, next battery use and its price, moved jobs, forecast miss) and rewritten after safety from the applied decision. | `test_optimizer.py` 8 | Done |
+
+### 3.6 Comparison and benchmark
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-C1 | Each hour the fixed rule runs through the same graph with the same inputs (seed, scenario, cuts, targets, DR, fault) and its own battery and job queue. | AI-off == baseline in 4 scenarios | Done |
+| FR-C2 | The comparison reports grid kWh, net cost, savings, renewable share, self-use, export, waste, power-cut hours, diesel, unserved kWh, battery wear, AI-fallback and override hours for both. | `/state` → `comparison` | Done |
+| FR-C3 | `benchmark.py` runs fixed rule, optimizer, optimizer with forecast correction and perfect-forecast optimizer on four recorded weeks, grid normal and with a daily 19–22 cut; `--ai-days N` adds the LLM on one season; writes `sample_results/benchmark.json` and the landing summary. Costs are adjusted for battery energy left at the end. | Run | Done |
+
+### 3.7 Operator notes, constraints, what-if, device plan
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-N1 | `POST /note/interpret` reads a note (≤ 300 chars) into actions — outage, SOC target, DR cap — via the LLM (strict schema) when the AI budget allows, else a rule-based parser (Hindi/Hinglish/English time phrases). It changes nothing. | `test_features.py` 1–2 | Done |
+| FR-N2 | Actions are validated: windows start within 48 h and last 1–12 h; targets between the reserve and 100% within 48 h; DR caps 0–20 kW. Invalid → 400. | `test_features.py` 2–3 | Done |
+| FR-N3 | `POST /note/apply` adds validated actions to the session; `GET /constraints` lists them; `POST /constraints/clear` removes one kind or all. | `test_features.py` 3–4 | Done |
+| FR-N4 | `POST /reset` with `keep_constraints` carries constraints into the new run at the same time of day; a plain reset clears them. | Browser check | Done |
+| FR-W1 | `POST /whatif` replays the next 24 h from the session's current moment (session untouched, no AI calls) as optimizer-now, optimizer-with-changes and fixed-rule-with-changes; inputs are validated; totals include cost adjusted for battery energy left. | `test_features.py` 5 | Done |
+| FR-P1 | `GET /plan` returns the optimizer's 24 h schedule; requires `X-Api-Key` when `DEVICE_API_KEY` is set (401 otherwise); signed with HMAC-SHA256 over the sorted-key JSON when `PLAN_SIGNING_KEY` is set. | `test_features.py` 6 | Done |
+
+### 3.8 Sessions and API
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-API1 | Session id from `X-Session-Id` or `?session=`; sanitised `[A-Za-z0-9_-]`, ≤ 64 chars; empty → `default`. At most 100 sessions (LRU); one lock per session. | `test_sessions.py` | Done |
+| FR-API2 | Seeds: `/reset` and `/simulate` accept `seed`; otherwise random; stored per hour and in the CSV. | `test_sessions.py` | Done |
+| FR-API3 | Endpoints as in [03-Architecture §5](03-Architecture.md#5-api). | Tests | Done |
+| FR-API4 | Invalid `/simulate` scenario or days, and empty CSV/log downloads, shall return 400/404 (currently 200 with an error body). | — | **Planned** |
+
+### 3.9 Frontend
+
+| ID | Requirement | Test | Status |
+|---|---|---|---|
+| FR-UI1 | Per-tab session id in `sessionStorage`; state, chart, totals, scenario and controller restored on load. | Browser | Done |
+| FR-UI2 | Controller switch (Optimizer / AI / Fixed rule) and language switch (English / हिंदी); Hindi shown when available. | Browser check | Done |
+| FR-UI3 | 3D energy scene: solar, battery (level), tower (dark in a cut), genset (running effects), house (windows dim if unserved); particle flows scale with kW; labels with values; screen-reader summary. | Browser check (5 labels, summary) | Done |
+| FR-UI4 | Without WebGL the flat diagram is shown; with reduced motion the 3D scene is still; nothing crashes the page. | Browser checks | Done |
+| FR-UI5 | Operator panel: note → interpretation (with source) → Apply/Cancel; active constraints with Clear; BMS fault test buttons. | Browser check | Done |
+| FR-UI6 | What-if panel: sun, power cut, battery health, peak price, extra load, DR; results table (3 runs × 5 metrics) and battery chart. | Browser check | Done |
+| FR-UI7 | Situation panel shows "Power cut" and genset kW in cuts; comparison card shows power-cut hours, diesel, unserved, battery wear. | Browser check | Done |
+| FR-UI8 | Landing results strip and FAQ numbers come from `results-summary.json`. | Browser check | Done |
+| FR-UI9 | Server error messages (e.g. rate limit) are shown to the user. | Browser check | Done |
 
 ## 4. Business rules
 
 | ID | Rule |
 |---|---|
-| BR1 | Safety rules always override the AI (FR-SF0–SF6). The AI never has the final word on reserve, rates, essential load or deadlines. |
-| BR2 | Energy priority for serving load: solar → battery (above reserve) → grid. |
-| BR3 | The battery is charged only from solar, never from the grid. |
-| BR4 | Export happens only after load and battery charging are satisfied; it is credited at `EXPORT_CREDIT_RS_PER_KWH`. |
-| BR5 | A flexible job may be deferred any number of times but must run in the last hour before its deadline. |
-| BR6 | Essential load is never deferred or dropped. |
-| BR7 | Savings are always stated against a baseline with the same inputs: grid-only (per-cycle report) and fixed rules (comparison). |
-| BR8 | All simulated inputs (demand, forecast error) are labelled as simulated in the UI and documentation. |
+| BR1 | Safety rules and BMS limits always win, whoever decides. |
+| BR2 | Load is served by solar first; the battery charges only from sun or genset, never the grid. |
+| BR3 | In a power cut: no grid, no export; essentials and due jobs only; battery, then genset, then (only if impossible) unserved. |
+| BR4 | Export only after load and battery charging are satisfied. |
+| BR5 | A flexible job must run by its deadline. |
+| BR6 | Savings are stated against baselines with the same inputs: the fixed rule (comparison, benchmark) and a site with no solar/battery (per-hour report). |
+| BR7 | Operator notes never change anything until confirmed; the LLM never commands a device. |
+| BR8 | Simulated inputs (demand, illustrative cuts) and placeholder prices are labelled as such. |
 
-## 5. Data requirements
+## 5. Data
 
-### 5.1 Session state (`GridState`, per session, in memory)
-`sim_hour` int ≥ 0 · `scenario` ∈ {sunny, normal, cloudy, monsoon} · `solar_kw` ≥ 0 · `forecast_solar_kw` ≥ 0 · `solar_forecast_next_hours` float[8] · `previous_forecast_kw` float|null · `battery_soc_pct` [0,100] · `battery_capacity_kwh` > 0 · `critical_load_kw` > 0 · `flexible_loads[]` {name, power_kw > 0, deadline "HH:MM", deadline_hour 0–23, deferred bool, must_run bool} · `new_flexible_loads[]` · `grid_price_per_kwh` > 0 · `price_band` · `decision` {solar_used_kw ≥ 0, battery_used_kw, grid_used_kw ≥ 0, grid_export_kw ≥ 0, solar_curtailed_kw ≥ 0, defer_loads[], reasoning} · `reasoning` · `alerts[]` · `deviation_detected` · `replanned` · `report` · `comparison`.
+### 5.1 Session state (`GridState`)
+See `backend/state.py` (every field is declared and commented there): hour, scenario, controller, weather source, solar and temperature, battery SOC/health/capacity/BMS, load and jobs, price, grid availability, outages, SOC targets, DR events, what-if fields, forecasts and forecast-check fields, seed, decision, plan, reasoning (EN/HI), AI flags, alerts, report.
 
-### 5.2 Cycle history entry (per cycle)
-`cycle`, `sim_hour`, `scenario`, `timestamp`, `solar_kw`, `battery_kw`, `grid_kw`, `export_kw`, `load_kw`, `deferred_loads[]`, `battery_soc_pct`, `reasoning`, `alerts[]`, `replanned`, `savings_rs`, `carbon_avoided_kg`, `grid_price_rs`, `agent_cost_rs` (net), `solar_available_kw`, `solar_self_used_kw`, `solar_curtailed_kw`, `rule_grid_kw`, `rule_cost_rs` (net), `rule_export_kw`, `rule_solar_self_used_kw`, `ai_fallback`, `forecast_miss_kw`, `seed`.
+### 5.2 History entry (per hour)
+`cycle, sim_hour, scenario, timestamp, controller, grid_available, solar_kw, battery_kw, grid_kw, export_kw, genset_kw, diesel_l, unserved_kw, load_kw, deferred_loads, battery_soc_pct, battery_soh_pct, battery_wear_rs, reasoning, alerts, replanned, forecast_miss_kw, seed, savings_rs, carbon_avoided_kg, grid_price_rs, agent_cost_rs, solar_available_kw, solar_self_used_kw, solar_curtailed_kw, rule_grid_kw, rule_battery_kw, rule_cost_rs, rule_export_kw, rule_diesel_l, rule_unserved_kw, rule_battery_wear_rs, rule_solar_self_used_kw, rule_battery_soc_pct, ai_fallback`.
 
-### 5.3 Persistence and retention
-- Session state and history: in memory only; lost on server restart; evicted by LRU (FR-API2).
-- Server log `backend/logs/surya_saarthi_log.txt`: append-only text, all sessions (operator only).
-- Saved results: `backend/sample_results/<scenario>.json` (versioned in git).
-- No personal data is collected.
+### 5.3 Persistence
+In memory only (sessions, history, constraints). Server log in `backend/logs/`. Recorded weather and benchmark results in git. No personal data is collected; operator-note text is sent to Groq to be understood and not stored.
 
-## 6. Validations
+## 6. Validation summary
 
 | Input | Rule | On failure |
 |---|---|---|
-| `scenario` | Must be a key of `WEATHER_SCENARIOS` | 400 (FR-API6) |
-| `days` | Integer 1–7 | 400 (FR-API6) |
-| `X-Session-Id` / `session` | Sanitised; never rejected | Falls back to `default` |
-| LLM output | FR-A3 | Safe fallback (FR-A6) |
-| Dashboard days input | Clamped to 1–7 client-side | — |
+| `scenario` | Key of `WEATHER_SCENARIOS` | Error body (FR-API4: should be 400) |
+| `days` | 1–7 | Error body |
+| `controller` | optimizer / ai / fixed | Error body |
+| Note text / actions | FR-N1, FR-N2 | 400 |
+| What-if changes | sun 0–1.5, health 50–100%, peak ×1–2, extra 0–5 kW, windows 1–12 h, DR cap 0–20 kW | 400 |
+| BMS fault | overtemp / sensor_lost / null | 400 |
+| LLM output | FR-A2 | Fixed-rule fallback |
 
 ## 7. Authentication and authorization
 
-- **AUTH1** The MVP has no login; all endpoints are public. *(Done — deliberate, for a public demo.)*
-- **AUTH2** A session can only be read or changed by a client presenting its id; ids are random UUIDs, not guessable sequences. *(Done)*
-- **AUTH3** `GROQ_API_KEY` is read from the server environment only; it is never sent to the browser or logged. *(Done)*
-- **AUTH4** *(Planned, post-MVP)* If the service ever controls real equipment, write endpoints (`/cycle`, `/simulate`, `/reset`) shall require an authenticated operator role.
+- **AUTH1** No login; public demo. *(Done — deliberate.)*
+- **AUTH2** Sessions only accessible with their unguessable id. *(Done)*
+- **AUTH3** `GROQ_API_KEY` server-side only. *(Done)*
+- **AUTH4** `/plan` key-protected and signed when configured. *(Done)*
+- **AUTH5** Operator login on write endpoints before any real equipment is controlled. *(Planned)*
 
 ## 8. Error handling
 
-| Situation | Required behaviour | Status |
+| Situation | Behaviour | Status |
 |---|---|---|
-| Weather API down | Clear-sky fallback (FR-S2) | Done |
-| LLM 429 / malformed / 503 | Retry (FR-A5), then fallback (FR-A6) | Done |
-| LLM key missing | Fallback every cycle, alert shown | Done |
-| Invalid request | 400 + JSON error (FR-API6) | Planned |
-| Empty history download | 404 + JSON error (FR-API7) | Planned |
-| Unhandled server error | 500; frontend shows "backend returned an error (500)" | Done |
-| Backend unreachable | Frontend shows "can't reach the backend at …" | Done |
+| Weather API down | Clear-sky fallback | Done |
+| LLM errors / key missing / budget used | Retry, then fixed-rule fallback, labelled | Done |
+| Optimizer finds no plan | Fixed-rule fallback, labelled | Done |
+| Note/what-if invalid | 400 + message shown in the UI | Done |
+| Too many requests | 429 + message shown | Done |
+| No WebGL / 3D scene fails | Flat diagram; landing background skipped | Done |
+| Backend unreachable | "Can't reach the backend at …" | Done |
 
-## 9. Edge cases (each must be handled without error)
+## 9. Edge cases
 
-1. Night: solar = 0 → no solar used, no export, no charging.
-2. Battery at 20%: no discharge; at 100%: no charging, surplus exported.
-3. First cycle: `previous_forecast_kw` is null → `forecast_miss_kw` null, not flagged.
-4. Several deferred jobs with the same deadline → all run by the deadline (may raise grid use that hour).
-5. Deadline wraps midnight (EV 22:00 → 06:00).
-6. AI defers a `must_run` job → removed (FR-SF0).
-7. AI names a job that doesn't exist → response rejected → fallback.
-8. AI returns negative solar or grid → clamped to 0.
-9. Surplus larger than export limit → remainder curtailed.
-10. 101st session → oldest evicted.
-11. Scenario switched on reset mid-day → the next cycle's forecast check may flag a miss (planned cautiously).
-12. Page refresh during a simulation → loop stops; server keeps completed cycles; dashboard restores them.
+1. Night: no solar, no export, no charging from sun.
+2. Battery at the reserve: no discharge; full: no charging (taper), surplus exported.
+3. First hour: no previous forecast → not flagged.
+4. Power cut with little battery: genset at ≥ minimum load; its spare output charges the battery.
+5. Power cut bigger than battery + genset: remaining essential load reported unserved.
+6. Deadline wraps midnight (EV 22:00 → 06:00); a job due during a cut runs in its last hour.
+7. AI defers a must-run job → removed; names an unknown job → answer rejected → fallback.
+8. BMS overtemp/sensor fault → battery isolated; the optimizer plans with zero battery.
+9. 101st session → oldest evicted.
+10. Simulate with constraints → carried to day 1 at the same time of day.
 
 ## 10. Non-functional requirements
 
-### Security
 | ID | Requirement | Status |
 |---|---|---|
-| NFR-S1 | No secrets in the repo; `.env` git-ignored; `.env.example` provided. | Done |
-| NFR-S2 | Session ids sanitised (FR-API1); no user input reaches file paths or shell. | Done |
-| NFR-S3 | CORS: allow all origins in MVP (public read-mostly demo); restrict to the deployed frontend origin in production. | Done / Planned |
-| NFR-S4 | Dependencies pinned (`requirements.txt`, `package-lock.json`). | Done |
-| NFR-S5 | Limit AI-backed calls per session (e.g. ≤ 200 cycles/hour) to protect API quota. | Planned |
-
-### Privacy and compliance
-| ID | Requirement | Status |
-|---|---|---|
-| NFR-P1 | No cookies, analytics or third-party requests from the browser; fonts and icons are served from the site. Only the random session id is stored (sessionStorage). | Done (verified: all browser requests go to the site or the backend) |
-| NFR-P2 | Only simulated numbers are sent to Groq; only the fixed site coordinates to Open-Meteo. | Done |
-| NFR-P3 | A Privacy & Disclaimer page (`#/privacy`) states what is stored, what is sent where, that it is a simulation not for real equipment, and no warranty; linked from both footers. | Done |
-| NFR-P4 | Open-Meteo attribution ("Weather data by Open-Meteo.com", CC BY 4.0) next to where its data appears (landing and dashboard footers); third-party credits on `#/credits` and in `THIRD_PARTY_NOTICES.md`; licence headers kept in the built JS. | Done |
-| NFR-P5 | Public claims match the sources: ToD solar hours at least 20% cheaper; peak 10–20% costlier, set by each state; we assume 20%. | Done |
-
-### Performance
-| ID | Requirement | Status |
-|---|---|---|
-| NFR-P1 | Non-AI endpoints (`/health`, `/scenarios`, `/state`, `/history`) respond in < 200 ms (p95) locally. | Done |
-| NFR-P2 | `/cycle` completes in < 5 s (p95) when the AI API is not rate-limited. | Done |
-| NFR-P3 | First JS download < 300 KB; heavy visuals lazy-loaded. | Done (247 KB) |
-| NFR-P4 | The dashboard loop (not `/simulate`) is used for long runs so no single HTTP request exceeds host timeouts. | Done |
-
-### Reliability and usability
-| ID | Requirement | Status |
-|---|---|---|
-| NFR-R1 | AI fallback hours ≤ 5% in a 2-day run on the free tier. | Verified per run |
-| NFR-U1 | Usable at 390 px width without horizontal scroll. | Done |
-| NFR-U2 | Respects `prefers-reduced-motion` (no animated backgrounds, no count-up). | Done |
-| NFR-U3 | Text contrast ≥ 4.5:1 for body text. | Done |
+| NFR-S1 | No secrets in the repo; `.env` git-ignored. | Done |
+| NFR-S2 | Session ids sanitised; no user input reaches file paths or a shell. | Done |
+| NFR-S3 | CORS restricted via `FRONTEND_ORIGINS` in production. | Done (configure on deploy) |
+| NFR-S4 | Dependencies pinned (`requirements.txt` incl. scipy/numpy, `package-lock.json`). | Done |
+| NFR-S5 | AI budget per rolling 24 h (demo 150, tab 48) and per-tab request limit (300/min). | Done |
+| NFR-PR1 | No cookies, analytics or third-party browser requests; fonts self-hosted. | Done |
+| NFR-PR2 | Groq receives simulated numbers (AI mode) and operator-note text only; Open-Meteo the site coordinates. Stated on the Privacy page. | Done |
+| NFR-PR3 | Open-Meteo attribution in both footers; credits and `THIRD_PARTY_NOTICES.md`; licence headers kept in the built JS. | Done |
+| NFR-PF1 | Optimizer hour (with baseline) ≈ 40 ms; a 7-day benchmark week per controller ≈ 4 s. | Done |
+| NFR-PF2 | Heavy visuals lazy-loaded (3D scene ~13 kB + three.js shared). | Done |
+| NFR-U1 | Usable at 390 px without horizontal scroll. | Done |
+| NFR-U2 | Respects `prefers-reduced-motion`. | Done |
+| NFR-U3 | Works without WebGL. | Done |
 
 ## 11. Acceptance criteria
 
-The build is accepted when:
-1. All `Done` requirements above pass their listed tests.
-2. `python test_safety_rules.py`, `python test_allocation_parsing.py`, `python test_sessions.py` pass with no network access.
-3. A 2-day `run_scenarios.py` produces, for every scenario: 0 reserve/rate violations, 0 unpowered essential load, 0 missed deadlines, AI fallback ≤ 5%.
-4. `npm run build` succeeds with no errors.
-5. All `Planned` items marked MVP (FR-API6, FR-API7, FR-UI8, FR-UI9, NFR-S5) are implemented and tested, or explicitly deferred in the Development Plan.
+1. All `Done` requirements pass their tests; the six offline test files pass with no network.
+2. The benchmark shows 0 safety overrides of optimizer plans and 0 unserved essential load.
+3. `npm run build` succeeds; the browser checks pass on desktop and 390 px.
+4. `Planned` items (FR-API4, AUTH5) are implemented or explicitly deferred in the roadmap.

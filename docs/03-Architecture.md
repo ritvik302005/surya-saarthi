@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| Version | 1.0 (MVP) |
-| Principle | Keep it small: one stateless-looking web app + one Python service. No database, queue or microservices until a real need appears. |
-| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [04-UI-UX](04-UI-UX.md) · [05-Development-Plan](05-Development-Plan.md) |
+| Version | **v2** (27 Sep 2026) |
+| Principle | Keep it small: one static web app + one Python service. No database, queue or microservices until a real need appears. |
+| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [04-UI-UX](04-UI-UX.md) · [06-V2-Roadmap](06-V2-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
 
 ---
 
@@ -14,194 +14,186 @@
 flowchart LR
     V[Viewer's browser] -- HTTPS --> FE[Frontend<br/>React SPA on Vercel]
     FE -- JSON over HTTPS<br/>X-Session-Id header --> BE[Backend<br/>FastAPI on Render]
-    BE -- hourly irradiance --> OM[(Open-Meteo<br/>weather API)]
-    BE -- allocation prompt --> GQ[(Groq API<br/>gpt-oss-20b)]
+    BE -- irradiance + temperature --> OM[(Open-Meteo<br/>weather API)]
+    BE -- AI mode prompts,<br/>operator notes --> GQ[(Groq API<br/>gpt-oss-20b)]
+    DEV[Site controller<br/>future] -. GET /plan<br/>signed, API key .-> BE
     OP[Operator] -. env vars, config.py, logs .-> BE
 ```
 
-Two deployable units, two external services. No database.
+Two deployable units, two external services, one future device interface. No database.
 
 ## 2. Tech stack
 
 | Layer | Choice | Why |
 |---|---|---|
-| Frontend | React 19, Vite 8, Tailwind CSS 4, Base UI / shadcn-style components | Fast static build; component primitives with accessible defaults |
-| Visuals | Hand-written SVG (energy flow, chart, gauge); three.js + simplex-noise for landing backgrounds only (lazy-loaded) | No chart library needed for three series; heavy visuals kept off the critical path |
-| Backend | Python 3.11+ , FastAPI, Uvicorn | Simple typed HTTP API; sync endpoints run in a thread pool |
-| Agent orchestration | LangGraph (`StateGraph`) | Makes the sense (+ forecast check) → allocate → safety → apply → report pipeline explicit; one pass per hour |
-| LLM client | `langchain-groq` → Groq `openai/gpt-oss-20b`, strict JSON schema, `reasoning_effort=low` | Fast, low-cost inference; schema-constrained output |
-| Weather | Open-Meteo forecast API (no key) | Free, real irradiance, 8-day horizon |
-| State | In-process memory, one `Session` object per browser tab | MVP demo needs no persistence; avoids operating a DB |
-| Hosting | Vercel (frontend, static), Render (backend, long-running web service) | Backend keeps in-memory state, so it needs a long-running process, not serverless |
-| Tests | Plain Python test scripts (offline + live) | Zero extra tooling; runnable anywhere |
-
-> **v2 additions (27 Sep 2026)** — the decide step is now `nodes/decide.py`, dispatching to the
-> **optimizer** (`optimizer.py` + `nodes/optimize.py`, 24 h MILP via SciPy/HiGHS, the default), the **AI**
-> (`nodes/allocation.py`) or the **fixed rule**; the baseline runs the fixed rule through the same graph.
-> New modules: `physics.py` (solar, battery, genset), `bms.py` (software BMS), `explain.py` (EN/HI
-> explanations), `notes.py` (operator notes), `whatif.py`, `benchmark.py` + `data/`. New endpoints: `/controller`,
-> `/note/*`, `/constraints*`, `/bms/fault`, `/whatif`, `/plan`. The diagrams below still show the SIH version;
-> see the README and `docs/06-V2-Roadmap.md` for v2.
+| Frontend | React 19, Vite 8, Tailwind CSS 4, Base UI / shadcn-style components | Fast static build; accessible primitives |
+| Visuals | **three.js 3D energy scene** (dashboard, lazy-loaded); hand-written SVG (flat fallback, chart, gauge); three.js + simplex-noise landing backgrounds | 3D where it helps understanding; SVG where it's lighter |
+| Backend | Python 3.12, FastAPI, Uvicorn | Simple typed HTTP API |
+| Orchestration | LangGraph `StateGraph` | Explicit pipeline, one pass per hour |
+| Optimizer | SciPy `milp` (HiGHS) | Exact 24 h mixed-integer plans in tens of ms; no extra dependency |
+| LLM | `langchain-groq` → Groq `openai/gpt-oss-20b`, strict JSON schema | AI mode and operator notes |
+| Weather | Open-Meteo forecast (live); Historical Weather + Previous Runs APIs (benchmark data) | Free, real data, real forecast errors |
+| State | In-process memory, one `Session` per browser tab | Demo needs no persistence |
+| Hosting | Vercel (frontend), Render (backend, long-running) | In-memory state needs a long-running process |
+| Tests | Plain Python scripts (offline + live); Playwright checks run from a scratch folder | Zero extra tooling in the repo |
 
 ## 3. Components
 
 ```mermaid
 flowchart TB
   subgraph Frontend [frontend/src]
-    L[Landing.jsx] --> APP[App.jsx<br/>lazy-loads Dashboard, Privacy]
+    L[Landing.jsx<br/>+ ResultsStrip from benchmark] --> APP[App.jsx]
     APP --> D[Dashboard.jsx]
-    APP --> PV[Privacy.jsx<br/>#/privacy, #/credits]
+    APP --> PV[Privacy.jsx]
+    D --> EV[EnergyView<br/>→ EnergyScene3D / EnergyFlow]
+    D --> OPP[OperatorPanel]
+    D --> WIP[WhatIfPanel]
     D --> SP[SituationPanel]
-    D --> EF[EnergyFlow]
-    D --> PS[PipelineStepper]
     D --> CC[ComparisonCard]
-    D --> HC[HistoryChart]
-    D --> HM[HistoryModal]
-    D --> API[api.js<br/>session id + fetch]
+    D --> HC[HistoryChart / HistoryModal]
+    D --> API[api.js]
   end
   subgraph Backend [backend]
-    M[main.py<br/>FastAPI routes, sessions,<br/>history, comparison, CSV]
-    G[graph.py<br/>LangGraph wiring]
+    M[main.py<br/>routes, sessions, budgets,<br/>history, comparison]
+    G[graph.py]
     subgraph Nodes [nodes/]
-      SE[sensing.py<br/>+ forecast check] --> AL[allocation.py] --> SA[safety.py] --> AP[apply.py]
-      AP --> RE[report.py]
+      SE[sensing.py<br/>weather, demand, BMS,<br/>cuts, forecast check] --> DE[decide.py]
+      DE --> OPT[optimize.py → optimizer.py]
+      DE --> AL[allocation.py LLM]
+      DE --> FX[fixed rule]
+      DE --> SA[safety.py<br/>plant + rules] --> AP[apply.py] --> RE[report.py<br/>+ explain.py]
     end
-    B[baseline.py<br/>rule-based controller]
-    C[config.py<br/>all tunables]
-    S[state.py<br/>GridState schema]
+    PH[physics.py]
+    BMS[bms.py]
+    N[notes.py]
+    W[whatif.py]
+    BM[benchmark.py + data/]
+    C[config.py]
   end
   API -- HTTP --> M
   M --> G --> Nodes
-  M --> B
+  M --> N
+  M --> W
 ```
 
 | Component | Responsibility | Key rules |
 |---|---|---|
-| `config.py` | Single source of every tunable: time step, reserve, rates, tariff, export, CO₂ factor, model, scenarios, site | Change behaviour here, not in node code |
-| `state.py` | `GridState` TypedDict. LangGraph drops keys not declared here | Add a field here before any node returns it |
-| `nodes/sensing.py` | Irradiance fetch/cache/refresh, forecast + noise, demand profile, flexible-job arrival and carry-over, tariff, **forecast check** (`forecast_miss_kw`, `replanned`) | Noise is keyed on (seed, hour), so runs are repeatable |
-| `nodes/allocation.py` | Build prompt, call LLM with retry, extract + validate JSON; fixed-rule fallback when the AI fails or the budget is used up | Never trusted — output always goes to safety |
-| `nodes/safety.py` | Checks 0–5 (SRS FR-SF0–SF8) | Pure function of state; fully unit-tested offline |
-| `nodes/apply.py` | Update SOC once, mark deferrals | Exactly once per hour (`test_cycle_accounting.py`) |
-| `nodes/report.py` | Per-cycle cost, export credit, savings, CO₂, solar accounting | |
-| `baseline.py` | Fixed-rule controller on identical inputs | Must stay "fair": same limits and export as the agent |
-| `main.py` | Routes, per-session state + locks + LRU, seeds, AI budgets, rate limit, CORS origins, history entries, comparison summary, CSV/text export, server log | Only place with global state (`_sessions`, `_ai_hours_all_sessions`) |
-| `api.js` | Per-tab session id (`sessionStorage`), `apiFetch`, error messages | All frontend HTTP goes through here |
+| `config.py` | Every tunable: site, battery, genset, tariff, export, CO₂, physics, BMS thresholds, AI model, demo limits, plan horizon | Change behaviour here, not in node code; placeholders marked |
+| `state.py` | `GridState` TypedDict | LangGraph drops undeclared keys — declare first |
+| `physics.py` | PV output (losses, heat, clipping), battery SOC with efficiency, wear cost, state of health, diesel fuel | Shared by every controller |
+| `bms.py` | Live charge/discharge limits, temperature derating/cut-off, alarms, injected faults | Safety obeys it |
+| `nodes/sensing.py` | Live or recorded weather, 24 h forecast (optional correction), demand + jobs, power cuts, BMS, price, forecast check | Noise keyed on (seed, hour) |
+| `nodes/decide.py` | Dispatch to optimizer / AI / fixed rule | `controller` field in state |
+| `optimizer.py`, `nodes/optimize.py` | 24 h MILP mirroring the plant; first hour applied (MPC); facts for explanations | Its plans pass safety unchanged (tested) |
+| `nodes/allocation.py` | LLM prompt, retry, JSON validation; fixed-rule fallback; honours the AI budget | Never trusted |
+| `nodes/safety.py` | Plant model + hard rules for every controller, including power cuts and genset | Pure function of state |
+| `nodes/apply.py` | Battery update (once), health, deferrals | Exactly once per hour |
+| `nodes/report.py`, `explain.py` | Cost incl. wear + diesel, CO₂, savings vs no solar/battery; EN/HI explanation from applied numbers | Explanation written after safety |
+| `notes.py` | Operator notes → validated actions (LLM schema, rule fallback) | Confirm before apply |
+| `whatif.py` | 24 h replays with changes; optimizer vs fixed rule | No AI calls, session untouched |
+| `benchmark.py`, `data/` | Recorded-weather benchmark; writes results + landing summary | Seeded, reproducible |
+| `main.py` | Routes, sessions (LRU 100), seeds, controllers, constraints, AI budgets, rate limit, CORS, fixed-rule baseline through the same graph, history, CSV, `/plan` signing | Only global state: `_sessions`, `_ai_hours_all_sessions` |
+| `EnergyScene3D.jsx` / `EnergyView.jsx` / `webgl.jsx` | 3D scene, fallback to flat SVG, WebGL check + error boundary | Never crash the page |
 
-## 4. Data flow — one cycle
+## 4. Data flow — one hour
 
 ```mermaid
 sequenceDiagram
   participant UI as Dashboard
   participant API as main.py
   participant GR as LangGraph
-  participant OM as Open-Meteo
   participant LLM as Groq
   UI->>API: POST /cycle (X-Session-Id)
-  API->>API: get session, acquire lock
-  API->>GR: invoke(session.state + sim_hour, scenario)
-  GR->>OM: (cached) hourly irradiance
-  GR->>GR: sense: solar, 8h forecast, demand, jobs, price
-  GR->>GR: forecast check: miss > 1 kW → plan cautiously
-  alt AI budget left
-    GR->>LLM: allocate prompt (strict JSON)
+  API->>API: session lock; inputs = seed, hour, cuts, targets, DR, fault
+  API->>GR: invoke(controller state)
+  GR->>GR: sense: weather, forecast, demand, BMS, price, forecast check
+  alt optimizer (default)
+    GR->>GR: 24 h MILP, first hour
+  else AI mode and budget left
+    GR->>LLM: prompt (strict JSON)
     LLM-->>GR: decision (or retry / fixed-rule fallback)
-  else budget used up
-    GR->>GR: fixed-rule decision (no LLM call)
+  else fixed rule
+    GR->>GR: solar → battery → grid/genset
   end
-  GR->>GR: safety checks 0–5
-  GR->>GR: apply: SOC (once), deferrals
-  GR->>GR: report: cost, export, CO₂, solar use
-  GR-->>API: new state
-  API->>API: rule-based step, history entry, comparison, log
+  GR->>GR: safety + BMS (plant model) → apply → report + explanation
+  GR-->>API: state
+  API->>GR: same inputs, controller = fixed (baseline, own battery)
+  GR-->>API: baseline state
+  API->>API: history entry, comparison, log
   API-->>UI: state (+ comparison)
-  UI->>UI: update panel, flow, cards, chart
 ```
 
-**Simulation** in the dashboard = `POST /reset` then N × `POST /cycle` (one HTTP request per hour, so no request is long-running). `POST /simulate` runs the same loop server-side for scripts (`run_scenarios.py`).
+**Simulation** in the dashboard = `POST /reset` (`keep_constraints`) then N × `POST /cycle`. `POST /simulate` runs the loop server-side for scripts.
 
 ## 5. API
 
-Base URL = backend origin. All endpoints accept optional `X-Session-Id`; download endpoints also accept `?session=`.
+All endpoints accept optional `X-Session-Id`; downloads and `/plan` also accept `?session=`. Errors: `{"error": "message"}` (400 invalid input, 401 bad device key, 429 rate limit, 503 no plan).
 
 | Method | Path | Body | Returns |
 |---|---|---|---|
-| GET | `/health` | — | `{"status":"ok"}` |
-| GET | `/scenarios` | — | `{"scenarios": {key: label}, "default": "normal"}` |
-| GET | `/state` | — | Current `GridState` + `comparison` (empty `{}` for a new session) |
-| POST | `/cycle` | — | New `GridState` after one hour |
-| POST | `/reset` | `{"scenario"?: str}` | `{"status":"reset","scenario":…}` |
-| POST | `/simulate` | `{"scenario": str, "days": 1–7}` | `{scenario, days, hours_run, summary{…, vs_rule_based}, cycles[], final_state}` |
-| GET | `/history` | — | `{"cycles": [CycleEntry…]}` |
-| GET | `/history/csv` | — | `text/csv` attachment |
-| GET | `/history/download` | — | `text/plain` log attachment |
-
-Error convention (target, SRS FR-API6/7): `400` invalid input, `404` nothing to download, `500` unexpected; body `{"error": "message"}`.
+| GET | `/health`, `/scenarios`, `/state`, `/history`, `/constraints` | — | status / scenarios / state / cycles / active constraints |
+| POST | `/cycle` | — | State after one hour |
+| POST | `/simulate` | `{scenario, days 1–7, seed?, controller?}` | Summary + cycles |
+| POST | `/reset` | `{scenario?, seed?, controller?, keep_constraints?}` | `{status, scenario, seed, controller}` |
+| POST | `/controller` | `{controller: optimizer\|ai\|fixed}` | `{controller}` |
+| POST | `/note/interpret` | `{text}` | `{actions, source, summary_en, summary_hi}` (changes nothing) |
+| POST | `/note/apply` | `{actions}` | Active constraints |
+| POST | `/constraints/clear` | `{kind?}` | Active constraints |
+| POST | `/bms/fault` | `{fault: overtemp\|sensor_lost\|null}` | Active constraints |
+| POST | `/whatif` | `{solar_scale?, battery_health_pct?, peak_multiplier?, extra_load_kw?, outage?, dr?}` | `{now, what_if, what_if_rule}` hourly + totals |
+| GET | `/plan` | — (`X-Api-Key` if configured) | 24 h schedule (+ HMAC-SHA256 signature if configured) |
+| GET | `/history/csv`, `/history/download` | — | CSV / text log |
 
 ## 6. Authentication and sessions
 
-- **No accounts in the MVP** (public demo). Isolation is by an unguessable per-tab UUID.
-- Session store: `OrderedDict` of `Session` objects, max 100, LRU eviction; each has a `threading.Lock` so requests for one session run one at a time.
-- Requests without an id share `default` (scripts, curl).
-- **If real hardware is ever controlled:** add operator login (e.g. OAuth or signed API tokens) in front of write endpoints; keep read-only views public. This is a gate to add, not a redesign.
+- Public demo, no accounts. Isolation by an unguessable per-tab id; LRU of 100 sessions, one lock each.
+- `/plan` can require `X-Api-Key` (`DEVICE_API_KEY`) and be signed (`PLAN_SIGNING_KEY`).
+- **Before controlling real hardware:** operator login on write endpoints; the device verifies signatures and keeps its own safety rules.
 
 ## 7. Storage
 
 | Data | Where | Lifetime |
 |---|---|---|
-| Session state + history | Process memory | Until restart or LRU eviction |
-| Irradiance cache | Process memory | Refreshed at run start if > 6 h old |
-| Server log | `backend/logs/surya_saarthi_log.txt` | Append-only on disk (ephemeral on Render free tier) |
-| Saved demo results | `backend/sample_results/*.json` | In git |
-| Secrets | Environment (`GROQ_API_KEY`) | Host settings; `.env` locally (git-ignored) |
+| Sessions, history, constraints | Process memory | Until restart / eviction |
+| Weather cache (live) | Process memory | Refreshed at run start if > 6 h old |
+| Recorded weather | `backend/data/weather_delhi.json` | In git (CC BY 4.0) |
+| Benchmark results | `backend/sample_results/benchmark.json`, `frontend/src/data/results-summary.json` | In git |
+| Server log | `backend/logs/` | Append-only, git-ignored |
+| Secrets | Environment / `.env` (git-ignored) | Host settings |
 
-**When to add a database:** only when history must survive restarts or be shared across instances (e.g. a real pilot). Then: SQLite for a single instance, Postgres for more — storing `CycleEntry` rows keyed by session/site and hour. Nothing else needs to change.
+## 8. Security and privacy
 
-## 8. Security
-
-- Secrets only in env; never returned by the API or logged.
-- Input sanitisation: session id regex; scenario and days validated; no user input reaches the filesystem path or a shell.
-- LLM output is untrusted: schema-constrained, validated, and always passed through the safety layer.
-- CORS: `*` for the demo → restrict to the Vercel origin for production (`allow_origins=[FRONTEND_URL]`).
-- Dependencies pinned; `npm audit` / `pip-audit` before release.
-- Planned: per-session rate limit on `/cycle` and `/simulate` to protect the Groq quota.
-- Privacy: the browser only talks to the site and the backend (fonts self-hosted; no cookies or analytics). Groq receives simulated numbers only; Open-Meteo receives the fixed site coordinates. The cycle log file holds no session id or IP. Details on the in-app Privacy & Disclaimer page.
+- Secrets only in env; LLM output untrusted (schema, validation, safety layer).
+- Operator notes: validated (time windows ≤ 12 h within 48 h, targets within reserve–100%, caps 0–20 kW), confirmed by the user; the LLM never commands a device.
+- Demo protection: AI hours per rolling 24 h (whole demo and per tab), per-tab request limit (429), `FRONTEND_ORIGINS` for CORS.
+- Privacy: no cookies/analytics; fonts self-hosted; Groq receives simulated numbers (AI mode) and the text of operator notes; Open-Meteo receives the fixed site coordinates. Stated on the Privacy page.
 
 ## 9. Deployment
 
 | Unit | Host | Build / start | Config |
 |---|---|---|---|
-| Frontend | Vercel | `npm ci && npm run build` → `dist/` | `VITE_API_URL=https://<backend>.onrender.com` |
-| Backend | Render web service (Python) | `pip install -r requirements.txt` · `uvicorn main:app --host 0.0.0.0 --port $PORT` · root dir `backend` | `GROQ_API_KEY`, `PYTHON_VERSION=3.12` |
+| Frontend | Vercel | `npm ci && npm run build` | `VITE_API_URL` |
+| Backend | Render (Python 3.12) | `pip install -r requirements.txt` · `uvicorn main:app --host 0.0.0.0 --port $PORT` · root `backend` | `GROQ_API_KEY`, `FRONTEND_ORIGINS`, `AI_HOURS_PER_DAY`, optional `DEVICE_API_KEY`, `PLAN_SIGNING_KEY` |
 
-Release steps: merge to `main` → Vercel and Render auto-deploy → smoke test (`/health`, one `/cycle`, dashboard loads) → run offline tests locally beforehand.
+v2 is not deployed yet (needs the GitHub decision).
 
-Free-tier notes: Render sleeps after inactivity (~50 s cold start) — open `/health` before a demo or add an external keep-alive ping; in-memory sessions reset on each deploy/restart.
-
-## 10. Monitoring
-
-Kept deliberately light for the MVP:
-- **Health:** `/health` checked by Render; optional external uptime ping.
-- **Logs:** Uvicorn access log + `ALLOCATION ERROR` tracebacks in the Render log stream; per-cycle entries in `surya_saarthi_log.txt`.
-- **Product signals already computed per run:** `ai_fallback_hours`, `safety_override_hours`, forecast-miss hours. A rising fallback count means API or quota trouble.
-- Next step if needed: structured JSON logs and a simple counter endpoint (`/metrics`) — not a full observability stack.
-
-## 11. Scalability
+## 10. Scalability
 
 | Need | Approach |
 |---|---|
-| More concurrent viewers | Already isolated per session; one instance handles demo traffic. The bottleneck is the Groq rate limit, not the server. |
-| Longer / heavier runs | Paid Groq tier or a different hosted model via `config.LLM_MODEL`; keep one request per hour of simulation. |
-| Multiple instances | Move `_sessions` to Redis or a DB (sticky sessions as an interim step). |
-| Real sites | Add a **device interface** behind `sensing` (read meter/inverter) and after `apply` (send setpoints): `SimulatedDevice` today, `ModbusDevice`/`MqttDevice` later. The agent, safety layer and API are unchanged. |
-| Multi-site coordination | One session per site plus a coordinator process sharing forecasts/surplus — post-MVP. |
+| More viewers | Sessions isolated; the optimizer needs no AI calls, so the Groq limit only affects AI mode |
+| Multiple instances | Move `_sessions` to Redis or a DB |
+| Real sites | A device adapter reads meters/inverters into sensing and follows `/plan` with local safety rules (Modbus/MQTT) |
+| Multi-site | One session per site + a coordinator (not built) |
 
-## 12. Decisions log
+## 11. Decisions log
 
 | Decision | Alternative rejected | Reason |
 |---|---|---|
-| In-memory sessions | Database | Demo only; no persistence requirement; less to operate |
-| Safety layer after the LLM | Rely on prompt instructions | Prompts are not guarantees; rules are testable |
-| Dashboard loops `/cycle` | Single long `/simulate` call | Live progress; avoids host HTTP timeouts |
-| Rule-based baseline inside the backend | Offline comparison script only | Comparison visible live, on identical inputs |
-| Hand-written SVG charts | Chart library | Three series; smaller bundle |
+| Optimizer decides by default; AI for language | LLM decides | Benchmark: optimizer cheaper, 0 overrides; the LLM needed overrides in 8–9 of 24 hours |
+| Baseline runs through the same graph | Separate baseline formula | Fair by construction; AI-off run == baseline (tested) |
+| Forecast check before deciding | Loop back after apply | The loop applied the battery twice in one hour |
+| Explanation written after safety | Explain the plan | Can't describe something that didn't happen |
+| Forecast correction off | On | Measured: helps one season, hurts three |
+| 3D scene with flat fallback | 3D only | Must work without WebGL and with reduced motion |
+| In-memory sessions | Database | Demo only |

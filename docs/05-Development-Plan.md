@@ -1,10 +1,17 @@
-# Surya Saarthi — Development Plan
+# Surya Saarthi — Development Plan (SIH version, historical)
+
+> **Superseded for v2.** This is the plan written for the SIH version (branch `sih-improvements` in the
+> separate `microgrid-agent-sih` repo). The current plan, status and open items are in
+> **[06-V2-Roadmap.md](06-V2-Roadmap.md)**. From this document, still relevant to v2: **M4** (400/404 status
+> codes — SRS FR-API4), **M6** release steps (deploy, CORS origin, keep-alive), the test strategy (§5), the QA
+> checklist (§6, extended below) and the bug-fixing process (§7). Obsolete for v2: M5 "saved results" (the
+> optimizer needs no AI calls), `run_scenarios.py` as the results source (replaced by `benchmark.py`).
 
 | | |
 |---|---|
-| Version | 1.0 |
+| Version | 1.0 (SIH) |
 | Branch | `sih-improvements` (merge to `main` at M6) |
-| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) |
+| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [06-V2-Roadmap](06-V2-Roadmap.md) |
 
 Most of the MVP is already built. This plan records what is done (so nobody rebuilds it), then lays out the remaining work in order, with dependencies, owners-to-assign, estimates and a Definition of Done.
 
@@ -134,6 +141,9 @@ Rule: any bug fixed in `nodes/`, `baseline.py` or `main.py` gets a failing check
 - [ ] Network tab: no requests to Google or other third parties (only the site and the backend).
 - [ ] Footer links (Open-Meteo, Privacy & Disclaimer, Credits & licences) work on landing and dashboard; browser Back returns to the previous view.
 - [ ] Screen reader names the dashboard controls "Weather scenario" and "Days to simulate (1 to 7)".
+- [ ] (v2) 3D scene renders with 5 labels; without WebGL the flat diagram shows and the landing page still loads; reduced motion = still scene.
+- [ ] (v2) Operator note → confirm → power cut applied; simulate keeps it; battery high at the cut; no grid, no unserved load in the cut.
+- [ ] (v2) What-if returns 3 runs × 5 metrics; BMS overheating isolates the battery; Hindi explanation shows in optimizer mode.
 
 ## 7. Bug-fixing process
 
