@@ -48,7 +48,7 @@ Status: ✅ done · 🔄 in progress · ⬜ not started
 | Grounded explanations EN/HI | ✅ | Templated from the plan's numbers, rewritten after the safety check from what was applied (`explain.py`). LLM phrasing + truthfulness checker **not done** (templates are true by construction) |
 | Software BMS | ✅ partly | Pack-level live limits, temperature derating/cut-off, health, fault injection (`bms.py`). **Not done:** cell-level model, Kalman-filter SOC, BLAST-Lite wear (simple throughput model instead) |
 | What-if panel | ✅ | Sun, power cut, battery health, peak tariff, extra load, DISCOM limit; no AI calls (`whatif.py`, `WhatIfPanel.jsx`) |
-| 3D energy scene | ✅ | three.js site (solar + sun, battery with charge bar, tower, genset, house, particle flows, labels); flat fallback; still under reduced motion (`EnergyScene3D.jsx`, `EnergyView.jsx`) |
+| 3D energy scene | ✅ | three.js site (solar + sun, battery with charge bar, tower, genset, house, power-flow lines, labels); simplified 28 Sep: fixed flat-looking view, only active flows, sky and ground follow the hour (bright by day, moon at night); flat fallback; still under reduced motion (`EnergyScene3D.jsx`, `EnergyView.jsx`) |
 | Demand response | ✅ | Grid-import caps in the optimizer (notes or what-if); measured against the same day without the cap in what-if. The AI is told the limits too; any hour over a limit (any controller) raises a "Demand response" alert. Safety does not force the limit down (open decision) |
 
 ### Phase 3 — Credibility and delivery ⬜ mostly open

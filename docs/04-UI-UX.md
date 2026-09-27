@@ -60,7 +60,7 @@ Landing (/)                                   Dashboard (same URL, view state)
 Privacy & Disclaimer (#/privacy; #/credits scrolls to Credits & licences)
 ```
 
-`App.jsx` switches landing ↔ dashboard; `#/privacy` and `#/credits` show the Privacy page (Back returns to where it was opened). Dashboard, Privacy and the 3D scene are lazy-loaded.
+`App.jsx` picks the view from the URL: none = landing, `#/dashboard`, `#/privacy` and `#/credits` (Privacy page; Back returns to where it was opened). Skip links move focus instead of changing the hash. Dashboard, Privacy and the 3D scene are lazy-loaded.
 
 ## 4. Screens
 
@@ -113,7 +113,7 @@ What is stored · What is sent where (Groq: simulated numbers in AI mode and the
 | Component | File | Notes |
 |---|---|---|
 | EnergyView | `EnergyView.jsx` | Chooses 3D or flat; screen-reader summary (`role="img"`); deferred-jobs strip |
-| EnergyScene3D | `EnergyScene3D.jsx` | three.js scene; props: solarGenKw, solarKw, batteryKw, gridKw, exportKw, gensetKw, unservedKw, gridAvailable, loadKw, socPct |
+| EnergyScene3D | `EnergyScene3D.jsx` | three.js scene; props: hour, solarGenKw, solarKw, batteryKw, gridKw, exportKw, gensetKw, unservedKw, gridAvailable, loadKw, socPct |
 | EnergyFlow | `EnergyFlow.jsx` | Flat SVG fallback (genset replaces grid in a cut) |
 | webgl helpers | `webgl.jsx` | `hasWebGL()`, `FallbackBoundary` |
 | OperatorPanel | `OperatorPanel.jsx` | `lang` |
@@ -124,10 +124,11 @@ What is stored · What is sent where (Groq: simulated numbers in AI mode and the
 | UI primitives | `components/ui/*` | Base UI / shadcn-style; links via `render={<a/>}` |
 
 ### 6.1 3D energy scene
-- Layout: solar array (back-left, tilted towards the viewer, with a sun whose size/brightness follows output), tower (back-centre, wires leaving the scene), battery cabinet (centre, charge bar), genset (front-left), house (right).
-- Flows: particles along curved conduits to the house (solar, battery, grid, genset), plus solar→battery, solar→grid (export), genset→battery; count, size and speed grow with kW.
-- States: night = dimmer, bluish light, no sun; power cut = dark tower, blinking red beacon, genset vibrating with smoke and a green lamp; unserved load = flickering windows.
-- Camera drifts slowly; narrower screens step back and aim right so the house stays in view.
+- View: fixed, gently tilted, no perspective and no camera motion, so it reads like a clear diagram. No shadows or glow effects.
+- Layout: solar array (left), tower (back-centre, wires leaving the scene), battery cabinet (centre, charge bar), genset (front-left, its label below it), house (right). Nothing overlaps on desktop or phone.
+- Time of day (from the simulated hour): sky gradient night → dawn → bright day → dusk → night; the ground lightens by day; the sun crosses from left (morning) to right (evening) and its glow grows with solar output; a moon at night. Corner chip: "☀ 13:00 · day" / morning / evening / "☾ night".
+- Flows: only lines that carry power are drawn (solar, battery, grid, genset to the house, plus solar→battery, solar→grid export, genset→battery); lighter dots move along them, more and faster with more kW.
+- States: power cut = dark tower, blinking red beacon, genset smoke and a green lamp; unserved load = flickering windows; house windows lit by the power it gets.
 - Labels are HTML (crisp, themed), positioned from the 3D anchors every frame, above the canvas.
 
 ## 7. Interactions and motion
