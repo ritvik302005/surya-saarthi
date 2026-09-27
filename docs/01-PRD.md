@@ -54,11 +54,11 @@ For the MVP, **P4 is the primary user** (the product is demonstrated in simulati
 
 | ID | Feature | Status |
 |---|---|---|
-| F1 | **Hourly agent loop**: sense → AI allocate → safety check → apply → replan-if-needed → report | Done |
+| F1 | **Hourly agent pipeline**: sense (+ forecast check) → AI allocate → safety check → apply → report, one pass per hour | Done |
 | F2 | **Real solar data**: Open-Meteo irradiance for the site + 8-hour solar forecast; per-scenario forecast error (passing clouds) | Done |
 | F3 | **AI allocation with reasoning**: LLM proposes solar/battery/grid split and which flexible jobs to defer, with a one-sentence reason | Done |
 | F4 | **Hard safety layer**: 20% reserve, 5 kW rate limits, no phantom solar, all non-deferred load powered, deadline enforcement, surplus solar stored, tolerance for rounding | Done |
-| F5 | **Replanning**: if actual solar misses the forecast by > 1 kW, decide again (once) with a more conservative instruction | Done |
+| F5 | **Forecast check**: if actual solar misses last hour's forecast by > 1 kW, this hour is planned with a more cautious instruction (checked before deciding, so the hour is applied once) | Done |
 | F6 | **Time-of-Day tariff** (solar hours −20%; peak +20%, since the peak surcharge is 10–20%, set by each state, and we assume 20%) with 8 hours of prices visible to the agent | Done |
 | F7 | **Flexible loads**: water pump and EV jobs can be deferred, carry forward, and must run before their deadline | Done |
 | F8 | **Net-metering export** of surplus solar, credited at a configurable rate | Done |

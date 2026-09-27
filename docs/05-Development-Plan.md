@@ -21,12 +21,12 @@ Most of the MVP is already built. This plan records what is done (so nobody rebu
 | Milestone | Contents | Status |
 |---|---|---|
 | **M0 — Setup** | Repo, FastAPI + LangGraph skeleton, React/Vite/Tailwind app, `.env` handling, Vercel/Render hosting | Done |
-| **M1 — Correct simulation** | 1-hour time step; CEA 0.71 CO₂ factor; model name in config; job carry-over + deadlines; safety checks 0–5 with tolerance; savings baseline over all served load; replanning that actually triggers (forecast noise); `solar_used` semantics | Done |
+| **M1 — Correct simulation** | 1-hour time step; CEA 0.71 CO₂ factor; model name in config; job carry-over + deadlines; safety checks 0–5 with tolerance; savings baseline over all served load; forecast-miss check (now before the decision, see v2 Phase 0); `solar_used` semantics | Done |
 | **M2 — Decision quality & reliability** | Groq retry/back-off + `reasoning_effort=low`; ToD tariff with 8 h prices; 8 h solar forecast; net-metering export; daily demand profile; weather refresh; pinned dependencies | Done |
 | **M3 — Proof & visibility** | Rule-based baseline + comparison summary; CSV + text exports; situation panel; comparison card; charging/export in energy flow; per-tab sessions; restore after refresh; clear error messages; no nested buttons; chart numbering | Done |
 | **M3.5 — Landing** | Lazy-loaded heavy visuals (first JS 884 → 247 KB); plain-language hero; readable CTA; GitHub links; accurate copy | Done |
 | **M3.6 — Legal & compliance pass** | Tariff wording "solar hours at least 20% cheaper; peak 10–20% costlier, set by each state; we assume 20%" everywhere; unsupported claims removed/softened; Open-Meteo attribution (CC BY 4.0) in landing + dashboard footers; Privacy & Disclaimer page with Credits & licences (`#/privacy`, `#/credits`); `THIRD_PARTY_NOTICES.md`; licence/credit headers kept in the build; labelled scenario select and days input; fonts self-hosted (no Google requests); unused template images removed | Done |
-| **Tests in place** | `test_safety_rules.py` (safety checks 0–5, carry-over, report, baseline, export), `test_allocation_parsing.py`, `test_sessions.py` — all offline; live scripts `test_graph.py`, `test_apply.py`, `test_forced_deviation.py`, `run_scenarios.py` | Done |
+| **Tests in place** | `test_cycle_accounting.py` (whole pipeline, 48 h), `test_safety_rules.py` (safety checks 0–5, carry-over, report, baseline, export, forecast check, seeds), `test_allocation_parsing.py`, `test_sessions.py` — all offline; live scripts `test_graph.py`, `test_apply.py`, `test_forced_deviation.py`, `run_scenarios.py` | Done |
 
 ## 3. Remaining roadmap
 
@@ -121,7 +121,7 @@ Rule: any bug fixed in `nodes/`, `baseline.py` or `main.py` gets a failing check
 - [ ] Landing → *See it decide* → *Run 1 hour* works in < 60 s for a new user.
 - [ ] Situation panel, energy flow, reasoning, three cards, comparison card all update after a cycle.
 - [ ] 1-day simulation completes; progress reaches 24/24; comparison shows agent vs rules.
-- [ ] A replan appears (badge + stepper) within a 2-day normal/cloudy run.
+- [ ] A forecast miss appears (badge + stepper) within a 2-day normal/cloudy run.
 - [ ] Noon on a sunny day shows battery charging; with battery full, "exporting X kW" appears.
 - [ ] Evening peak shows ₹9.60 "Evening peak (costly)".
 - [ ] Refresh keeps the run; a second tab starts empty.

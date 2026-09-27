@@ -48,10 +48,10 @@ function Reveal({ children, className = '', delay = 0 }) {
 
 const STAGES = [
   { name: 'Sense', desc: 'Pulls real solar irradiance for the site from a live weather API, plus an 8-hour forecast, and reads a simulated demand profile.' },
+  { name: 'Check forecast', desc: 'Compares this hour’s real sunlight with what it forecast an hour ago. If it missed by more than 1 kW, this hour is planned more cautiously.' },
   { name: 'Allocate', desc: "An LLM weighs solar, battery, grid and time-of-day prices, decides what to store, export or defer, and explains why." },
   { name: 'Safety limits', desc: "A hard, non-negotiable rule check — the model's suggestion can be overridden, never the reserve floor." },
-  { name: 'Apply', desc: "Battery charge updates for real, and this cycle's forecast is compared against what was actually predicted." },
-  { name: 'Replan', desc: 'If the forecast was wrong by enough to matter, it loops back and decides again, more conservatively.' },
+  { name: 'Apply', desc: 'The battery charge updates once, by exactly what was decided, and deferred jobs carry forward to their deadline.' },
   { name: 'Report', desc: 'Savings and carbon avoided are computed against a grid-only baseline, and compared live with a fixed-rule controller.' },
 ]
 
@@ -110,7 +110,7 @@ export default function Landing({ onStart }) {
         <p className="relative z-10 text-muted-foreground text-[clamp(1rem,1.5vw,1.2rem)] leading-relaxed max-w-xl mb-9">
           An AI agent that decides every hour whether to use solar, battery or grid power — storing
           sunshine for the evening peak, exporting the rest, moving flexible jobs to cheaper hours —
-          and replanning when its own forecast turns out wrong.
+          and planning more cautiously when its own forecast turns out wrong.
         </p>
         <LiquidButton size="xl" onClick={onStart} className="relative z-10">See it decide →</LiquidButton>
 

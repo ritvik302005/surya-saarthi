@@ -9,7 +9,7 @@ export default function PipelineStepper({ stepIndex, replanFlash }) {
           <div key={label} className="step" data-state={state}>
             <span className="step-dot" />
             <span className="step-label">{label}</span>
-            {label === 'Allocate' && replanFlash && <span className="step-loop">↻ replanning</span>}
+            {label === 'Allocate' && replanFlash && <span className="step-loop">forecast missed: cautious</span>}
             {i < STEPS.length - 1 && <span className="step-line" />}
           </div>
         )

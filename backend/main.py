@@ -2,15 +2,17 @@ import csv
 import io
 import os
 import re
+import secrets
 import threading
-from collections import OrderedDict
+import time
+from collections import OrderedDict, deque
 from datetime import datetime
 from typing import Optional
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Header, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from pydantic import BaseModel
 
 load_dotenv()
@@ -22,9 +24,13 @@ from nodes.sensing import refresh_irradiance_if_stale
 
 app = FastAPI(title="Surya Saarthi API")
 
+# Comma-separated list of sites allowed to call the API, e.g.
+# FRONTEND_ORIGINS=https://microgrid-agent.vercel.app ; unset means any origin (local dev).
+FRONTEND_ORIGINS = [o.strip() for o in os.getenv("FRONTEND_ORIGINS", "*").split(",") if o.strip()]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=FRONTEND_ORIGINS,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -36,6 +42,30 @@ os.makedirs(LOG_DIR, exist_ok=True)
 MAX_SESSIONS = 100   # oldest idle sessions are dropped beyond this
 
 
+class RollingCounter:
+    """Counts events inside a sliding time window (thread-safe)."""
+
+    def __init__(self, window_s):
+        self.window_s = window_s
+        self.times = deque()
+        self.lock = threading.Lock()
+
+    def count(self, now=None):
+        now = time.time() if now is None else now
+        with self.lock:
+            while self.times and self.times[0] <= now - self.window_s:
+                self.times.popleft()
+            return len(self.times)
+
+    def add(self, now=None):
+        with self.lock:
+            self.times.append(time.time() if now is None else now)
+
+
+DAY_S = 24 * 3600
+_ai_hours_all_sessions = RollingCounter(DAY_S)   # protects the shared Groq quota
+
+
 class Session:
     """Everything one viewer's run needs. Each browser tab gets its own, so two
     people using the live demo at once never see each other's cycles."""
@@ -43,12 +73,18 @@ class Session:
     def __init__(self, scenario=config.DEFAULT_SCENARIO):
         self.lock = threading.Lock()
         self.scenario = scenario
+        # Created once, not on reset, so resetting doesn't restore a used-up budget.
+        self.ai_hours = RollingCounter(DAY_S)
+        self.requests = RollingCounter(60)
         self.reset()
 
-    def reset(self, scenario=None):
+    def reset(self, scenario=None, seed=None):
         # keeps self.lock: reset runs while the lock is held
         refresh_irradiance_if_stale()
         self.scenario = scenario or self.scenario
+        # Clouds and demand noise come from this seed, so a run can be repeated exactly
+        # (the LLM itself can still answer differently).
+        self.seed = seed if seed is not None else secrets.randbelow(1_000_000)
         self.state = {}
         self.history = []
         self.cycle_counter = 0
@@ -77,13 +113,36 @@ def session_from(x_session_id, session_query=None):
     return get_session(x_session_id or session_query)
 
 
+def _rate_limited(session):
+    """Per-session request limit, so one tab can't flood the server. (Session ids are
+    chosen by the browser, so this is a courtesy limit; the AI budget below is what
+    protects the Groq quota.)"""
+    limit = config.REQUESTS_PER_MINUTE_PER_SESSION
+    if limit is not None and session.requests.count() >= limit:
+        return JSONResponse(status_code=429, content={
+            "error": "Too many requests from this session. Wait a minute and try again."})
+    session.requests.add()
+    return None
+
+
+def _ai_blocked_reason(session):
+    """Why the LLM may not be used for the next hour, or None if it may."""
+    if config.AI_HOURS_PER_DAY is not None and _ai_hours_all_sessions.count() >= config.AI_HOURS_PER_DAY:
+        return "the demo's AI budget for today is used up"
+    if config.AI_HOURS_PER_SESSION_PER_DAY is not None and session.ai_hours.count() >= config.AI_HOURS_PER_SESSION_PER_DAY:
+        return "this session's AI budget for today is used up"
+    return None
+
+
 class ResetOptions(BaseModel):
     scenario: Optional[str] = None
+    seed: Optional[int] = None
 
 
 class SimulateOptions(BaseModel):
     scenario: str = config.DEFAULT_SCENARIO
     days: int = 1
+    seed: Optional[int] = None
 
 
 def format_log_entry(entry):
@@ -96,7 +155,7 @@ def format_log_entry(entry):
     ]
     lines += [f"  Alert: {a}" for a in entry["alerts"]] or ["  Alerts: none"]
     lines += [
-        f"  Replanned: {'Yes' if entry['replanned'] else 'No'}",
+        f"  Forecast missed: {'Yes' if entry['replanned'] else 'No'}",
         f"  Savings: Rs {entry['savings_rs']} | Carbon avoided: {entry['carbon_avoided_kg']} kg",
         "-" * 70,
     ]
@@ -114,10 +173,15 @@ def _run_one_cycle(session):
     they can never drift out of sync with each other."""
     session.state["sim_hour"] = session.sim_hour
     session.state["scenario"] = session.scenario
+    session.state["seed"] = session.seed
+    session.state["ai_blocked_reason"] = _ai_blocked_reason(session)
 
     state = graph.invoke(session.state)
     session.cycle_counter += 1
     session.sim_hour += 1
+    if state.get("ai_used"):
+        session.ai_hours.add()
+        _ai_hours_all_sessions.add()
 
     decision = state.get("decision", {})
     report = state.get("report", {})
@@ -142,7 +206,9 @@ def _run_one_cycle(session):
         "battery_soc_pct": state.get("battery_soc_pct", 0),
         "reasoning": state.get("reasoning", ""),
         "alerts": state.get("alerts", []),
-        "replanned": report.get("replanned_this_cycle", False),
+        "replanned": report.get("replanned_this_cycle", False),   # forecast missed, so planned cautiously
+        "forecast_miss_kw": state.get("forecast_miss_kw"),
+        "seed": session.seed,
         "savings_rs": report.get("savings_rs", 0),
         "carbon_avoided_kg": report.get("carbon_avoided_kg", 0),
         "grid_price_rs": state.get("grid_price_per_kwh", 0),
@@ -155,7 +221,7 @@ def _run_one_cycle(session):
         "rule_cost_rs": rule["net_cost_rs"],
         "rule_export_kw": rule["export_kw"],
         "rule_solar_self_used_kw": rule["solar_self_used_kw"],
-        "ai_fallback": any("allocator output was unavailable" in a for a in state.get("alerts", [])),
+        "ai_fallback": bool(state.get("ai_fallback")),
     }
 
     session.history.append(entry)
@@ -192,8 +258,7 @@ def comparison_summary(cycle_history):
         "rule_export_kwh": round(sum(c["rule_export_kw"] for c in cycle_history) * config.CYCLE_HOURS, 2),
         "solar_wasted_kwh": round(sum(c["solar_curtailed_kw"] for c in cycle_history) * config.CYCLE_HOURS, 2),
         "ai_fallback_hours": sum(1 for c in cycle_history if c["ai_fallback"]),
-        "safety_override_hours": sum(1 for c in cycle_history if any(
-            a.startswith("Safety override") and "allocator output was unavailable" not in a for a in c["alerts"])),
+        "safety_override_hours": sum(1 for c in cycle_history if any(a.startswith("Safety override") for a in c["alerts"])),
     }
 
 
@@ -222,6 +287,8 @@ def get_state(x_session_id: Optional[str] = Header(None)):
 def run_cycle(x_session_id: Optional[str] = Header(None)):
     """Advances exactly one simulated hour using the session's current scenario."""
     session = session_from(x_session_id)
+    if (limited := _rate_limited(session)):
+        return limited
     with session.lock:
         _run_one_cycle(session)
         return session.state
@@ -238,8 +305,10 @@ def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None
         return {"error": "days must be between 1 and 7"}
 
     session = session_from(x_session_id)
+    if (limited := _rate_limited(session)):
+        return limited
     with session.lock:
-        session.reset(options.scenario)
+        session.reset(options.scenario, options.seed)
         total_hours = options.days * 24
         for _ in range(total_hours):
             _run_one_cycle(session)
@@ -248,11 +317,12 @@ def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None
         return {
             "scenario": options.scenario,
             "days": options.days,
+            "seed": session.seed,
             "hours_run": total_hours,
             "summary": {
                 "total_savings_rs": round(sum(c["savings_rs"] for c in history), 2),
                 "total_carbon_avoided_kg": round(sum(c["carbon_avoided_kg"] for c in history), 2),
-                "cycles_with_replan": sum(1 for c in history if c["replanned"]),
+                "cycles_with_replan": sum(1 for c in history if c["replanned"]),   # hours planned cautiously after a forecast miss
                 "deferred_load_events": sum(len(c["deferred_loads"]) for c in history),
                 "final_battery_soc_pct": session.state.get("battery_soc_pct", 0),
                 "vs_rule_based": comparison_summary(history),
@@ -286,7 +356,7 @@ def download_csv(x_session_id: Optional[str] = Header(None), session: Optional[s
     fields = ["cycle", "sim_hour", "scenario", "solar_available_kw", "solar_kw", "battery_kw", "grid_kw",
               "export_kw", "load_kw", "battery_soc_pct", "grid_price_rs", "agent_cost_rs",
               "rule_grid_kw", "rule_export_kw", "rule_cost_rs",
-              "savings_rs", "carbon_avoided_kg", "replanned", "ai_fallback"]
+              "savings_rs", "carbon_avoided_kg", "replanned", "forecast_miss_kw", "ai_fallback", "seed"]
     buffer = io.StringIO()
     writer = csv.DictWriter(buffer, fieldnames=fields, extrasaction="ignore")
     writer.writeheader()
@@ -300,9 +370,12 @@ def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[s
     """Clears this session. Optionally pass {"scenario": "cloudy"} to switch the
     weather scenario for the next cycles."""
     scenario = options.scenario if options else None
+    seed = options.seed if options else None
     if scenario and scenario not in config.WEATHER_SCENARIOS:
         return _invalid_scenario(scenario)
     session = session_from(x_session_id)
+    if (limited := _rate_limited(session)):
+        return limited
     with session.lock:
-        session.reset(scenario)
-        return {"status": "reset", "scenario": session.scenario}
+        session.reset(scenario, seed)
+        return {"status": "reset", "scenario": session.scenario, "seed": session.seed}

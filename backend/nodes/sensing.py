@@ -66,8 +66,14 @@ def fetch_hourly_irradiance():
     return _irradiance_cache
 
 
-def cloud_noise(variability):
-    return min(1.25, max(0.1, random.gauss(1.0, variability)))
+def hour_rng(seed, sim_hour):
+    """Random numbers for one simulated hour. Keyed on (seed, hour), so a run with the
+    same seed sees exactly the same clouds and demand, and sessions never share state."""
+    return random.Random(f"{seed}:{sim_hour}") if seed is not None else random.Random()
+
+
+def cloud_noise(variability, rng=random):
+    return min(1.25, max(0.1, rng.gauss(1.0, variability)))
 
 
 def refresh_irradiance_if_stale():
@@ -85,11 +91,11 @@ def irradiance_to_kw(irradiance_w_m2, system_capacity_kw=None):
     return round(system_capacity_kw * (irradiance_w_m2 / 1000), 2)
 
 
-def simulate_demand(sim_hour):
+def simulate_demand(sim_hour, rng=random):
     """Essential load follows a daily profile (+/-10% noise); flexible-load
     windows key off the simulated hour (wraps every 24)."""
     hour_of_day = sim_hour % 24
-    critical_load_kw = round(ESSENTIAL_LOAD_PROFILE_KW[hour_of_day] * random.uniform(0.9, 1.1), 2)
+    critical_load_kw = round(ESSENTIAL_LOAD_PROFILE_KW[hour_of_day] * rng.uniform(0.9, 1.1), 2)
     flexible_loads = []
     # Each flexible load is a one-hour job; the start hour in the name keeps
     # jobs unique so one can be deferred while another runs.
@@ -120,25 +126,37 @@ def read_and_forecast_node(state):
     scenario_key = state.get("scenario", config.DEFAULT_SCENARIO)
     scenario = config.WEATHER_SCENARIOS.get(scenario_key, config.WEATHER_SCENARIOS[config.DEFAULT_SCENARIO])
 
+    rng = hour_rng(state.get("seed"), sim_hour)
+
     series = fetch_hourly_irradiance()
     # Forecast = the weather feed scaled for the scenario. Actual = forecast with
-    # passing-cloud noise, so the forecast can be wrong and the agent replans.
+    # passing-cloud noise, so the forecast can be wrong.
     forecast_now = series[sim_hour % len(series)] * scenario["multiplier"]
-    current_irr = forecast_now * cloud_noise(scenario["variability"])
+    current_irr = forecast_now * cloud_noise(scenario["variability"], rng)
     forecast_next_hours = [
         irradiance_to_kw(series[(sim_hour + k) % len(series)] * scenario["multiplier"])
         for k in range(1, config.SOLAR_FORECAST_HOURS + 1)
     ]
 
-    critical_load_kw, new_loads = simulate_demand(sim_hour)
+    critical_load_kw, new_loads = simulate_demand(sim_hour, rng)
     flexible_loads = merge_flexible_loads(state.get("flexible_loads", []), new_loads, sim_hour % 24)
+
+    # Forecast check happens here, BEFORE anything is decided: compare this hour's actual
+    # sunlight with what last hour forecast for it. A big miss makes this hour's plan
+    # cautious. (It used to loop back after apply and decide the hour a second time,
+    # which applied the battery twice.)
+    solar_kw = irradiance_to_kw(current_irr)
+    previous_forecast = state.get("forecast_solar_kw")   # what last cycle predicted for right now
+    forecast_miss_kw = round(solar_kw - previous_forecast, 2) if previous_forecast is not None else None
+    forecast_missed = forecast_miss_kw is not None and abs(forecast_miss_kw) > config.DEVIATION_THRESHOLD_KW
 
     return {
         **state,
         "sim_hour": sim_hour,
         "scenario": scenario_key,
-        "previous_forecast_kw": state.get("forecast_solar_kw"),  # what last cycle predicted for right now
-        "solar_kw": irradiance_to_kw(current_irr),
+        "previous_forecast_kw": previous_forecast,
+        "forecast_miss_kw": forecast_miss_kw,
+        "solar_kw": solar_kw,
         "forecast_solar_kw": forecast_next_hours[0],
         "solar_forecast_next_hours": forecast_next_hours,
         "critical_load_kw": critical_load_kw,
@@ -148,12 +166,11 @@ def read_and_forecast_node(state):
         "battery_capacity_kwh": state.get("battery_capacity_kwh", 10.0),
         "grid_price_per_kwh": config.grid_price_for_hour(sim_hour % 24),
         "price_band": config.price_band_for_hour(sim_hour % 24),
-        # Alerts belong to the current cycle. A replan does not pass through
-        # sensing, so both interventions from that single cycle are retained.
+        # Alerts and the AI flags belong to the current cycle only.
         "alerts": [],
-        # Replan flags belong to one cycle too. Without this reset, the first
-        # replan stuck for the rest of the run: no further replans were
-        # possible and every later prompt got the "forecast was wrong" note.
-        "replanned": False,
-        "deviation_detected": False,
+        "ai_used": False,
+        "ai_fallback": False,
+        # "replanned" keeps its old name for the API/CSV; it now means "a forecast miss
+        # was detected, so this hour was planned cautiously".
+        "replanned": forecast_missed,
     }

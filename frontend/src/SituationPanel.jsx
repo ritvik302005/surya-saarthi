@@ -32,7 +32,7 @@ export default function SituationPanel({ state, scenarioLabel }) {
         label="Sunlight"
         value={`${solarNow.toFixed(1)} kW`}
         sub={expected == null ? 'first reading' : surprise
-          ? `forecast said ${expected.toFixed(1)} kW, so it replans`
+          ? `forecast said ${expected.toFixed(1)} kW, so it plans cautiously`
           : `forecast said ${expected.toFixed(1)} kW`}
         valueClass={surprise ? 'text-grid' : 'text-solar'}
       />

@@ -78,7 +78,7 @@ export default function HistoryChart({ history }) {
         <span style={{ color: 'var(--solar)' }}>Solar {hovered.solar.toFixed(1)} kW</span>
         <span style={{ color: 'var(--battery)' }}>Battery {hovered.battery.toFixed(1)} kW</span>
         <span style={{ color: 'var(--grid)' }}>Grid {hovered.grid.toFixed(1)} kW</span>
-        {hovered.replanned && <span className="tooltip-replanned">↻ replanned</span>}
+        {hovered.replanned && <span className="tooltip-replanned">forecast missed</span>}
       </div>
     </div>
   )

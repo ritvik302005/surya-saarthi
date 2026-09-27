@@ -42,7 +42,8 @@ def generate_report_node(state):
         "carbon_avoided_kg": carbon_avoided,
         "deferred_loads": deferred,
         "alerts": state["alerts"],
-        "replanned_this_cycle": state.get("replanned", False)
+        "replanned_this_cycle": state.get("replanned", False),   # forecast missed, so planned cautiously
+        "forecast_miss_kw": state.get("forecast_miss_kw"),
     }
 
     return {**state, "report": report}

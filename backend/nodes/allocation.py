@@ -106,15 +106,25 @@ def _invoke_with_retry(messages):
     raise last_error
 
 
-def _fallback_decision(state):
-    """A deterministic allocation that always covers the critical load safely."""
-    solar_for_critical = min(max(0.0, float(state["solar_kw"])), float(state["critical_load_kw"]))
+def _fallback_decision(state, why):
+    """The fixed rule, used whenever the LLM isn't: solar first, then battery down to
+    the reserve (within the rate limit), then grid; every job runs now, none deferred.
+    It is the same logic as the rule-based baseline, so a fallback hour is never worse
+    than the comparison controller. Surplus solar charging and export are filled in
+    by the safety layer, as for any decision."""
+    solar = max(0.0, float(state["solar_kw"]))
+    demand = float(state["critical_load_kw"]) + sum(float(load["power_kw"]) for load in state["flexible_loads"])
+    solar_used = min(solar, demand)
+    remaining = demand - solar_used
+    available_kwh = max(0.0, (state["battery_soc_pct"] - config.BATTERY_RESERVE_PCT) / 100 * state["battery_capacity_kwh"])
+    battery = min(remaining, available_kwh / config.CYCLE_HOURS, config.BATTERY_MAX_DISCHARGE_KW)
     return {
-        "solar_used_kw": round(solar_for_critical, 2),
-        "battery_used_kw": 0.0,
-        "grid_used_kw": round(max(0.0, float(state["critical_load_kw"]) - solar_for_critical), 2),
-        "defer_loads": [load["name"] for load in state["flexible_loads"] if not load.get("must_run")],
-        "reasoning": "Safety override applied a deterministic allocation after the allocator response was unavailable.",
+        "solar_used_kw": round(solar_used, 2),
+        "battery_used_kw": round(battery, 2),
+        "grid_used_kw": round(remaining - battery, 2),
+        "defer_loads": [],
+        "reasoning": (f"The fixed rule decided this hour ({why}): solar first, then battery above the "
+                      f"{config.BATTERY_RESERVE_PCT:.0f}% reserve, then grid."),
     }
 
 
@@ -187,7 +197,20 @@ Grid price now: Rs {state['grid_price_per_kwh']}/kWh
 Grid price next 8 hours: {upcoming_prices}
 """
     if state.get("replanned"):
-        human_prompt += "\nThe last forecast was inaccurate. Preserve more battery reserve for uncertainty.\n"
+        human_prompt += (
+            f"\nForecast miss: sunlight this hour is {state['solar_kw']} kW, but last hour's forecast said "
+            f"{state.get('previous_forecast_kw')} kW. The next hours may be off too, so keep more battery in reserve.\n"
+        )
+
+    alerts = list(state.get("alerts", []))
+    blocked = state.get("ai_blocked_reason")
+    if blocked:
+        # The server's AI budget is used up: don't call the LLM at all.
+        parsed = _fallback_decision(state, f"AI not used: {blocked}")
+        alerts.append(f"AI fallback: {blocked}, so the fixed rule decided this hour.")
+        return {**state, "decision": parsed, "reasoning": parsed["reasoning"], "alerts": alerts,
+                "ai_used": False, "ai_fallback": True}
+
     fallback = False
     try:
         response = _invoke_with_retry(
@@ -200,11 +223,7 @@ Grid price next 8 hours: {upcoming_prices}
         traceback.print_exc()
         print("=========================")
         fallback = True
-        parsed = _fallback_decision(state)
-    alerts = list(state.get("alerts", []))
-    if fallback:
-        alerts.append(
-            "Safety override: allocator output was unavailable or invalid; "
-            "a deterministic safe allocation was applied."
-        )
-    return {**state, "decision": parsed, "reasoning": parsed["reasoning"], "alerts": alerts}
+        parsed = _fallback_decision(state, "the AI's answer was unavailable or invalid")
+        alerts.append("AI fallback: the AI's answer was unavailable or invalid, so the fixed rule decided this hour.")
+    return {**state, "decision": parsed, "reasoning": parsed["reasoning"], "alerts": alerts,
+            "ai_used": True, "ai_fallback": fallback}

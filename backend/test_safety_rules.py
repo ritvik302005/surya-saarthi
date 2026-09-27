@@ -89,10 +89,22 @@ assert report["served_load_kw"] == 4.5, report
 assert report["savings_rs"] == round((4.5 - 1.5) * 8.0, 2), report
 assert report["deferred_loads"] == [ev["name"]], report
 
-# 9b. Replan flags reset every cycle (a replan must not stick to later hours)
+# 9b. The forecast check runs in sensing, before the decision, and belongs to one hour only
+import nodes.sensing as sensing
 from nodes.sensing import read_and_forecast_node
-fresh = read_and_forecast_node({"sim_hour": 12, "replanned": True, "deviation_detected": True})
-assert fresh["replanned"] is False and fresh["deviation_detected"] is False, fresh
+sensing.fetch_hourly_irradiance = lambda: sensing._simulate_clear_sky_curve()   # offline
+fresh = read_and_forecast_node({"sim_hour": 12, "replanned": True, "seed": 7})
+assert fresh["replanned"] is False and fresh["forecast_miss_kw"] is None, fresh   # no earlier forecast yet
+missed = read_and_forecast_node({"sim_hour": 12, "forecast_solar_kw": 99.0, "seed": 7})
+assert missed["replanned"] is True and missed["forecast_miss_kw"] < -1, missed
+close = read_and_forecast_node({"sim_hour": 12, "forecast_solar_kw": fresh["solar_kw"], "seed": 7})
+assert close["replanned"] is False and close["forecast_miss_kw"] == 0.0, close
+
+# 9c. Same seed + same hour = same clouds and demand; a different seed differs
+again = read_and_forecast_node({"sim_hour": 12, "seed": 7})
+assert (again["solar_kw"], again["critical_load_kw"]) == (fresh["solar_kw"], fresh["critical_load_kw"])
+other = read_and_forecast_node({"sim_hour": 12, "seed": 8})
+assert (other["solar_kw"], other["critical_load_kw"]) != (fresh["solar_kw"], fresh["critical_load_kw"])
 
 # 10. Rule-based baseline: solar, then battery to reserve, then grid; surplus charges
 from baseline import rule_based_step

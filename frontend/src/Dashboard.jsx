@@ -100,11 +100,7 @@ export default function Dashboard({ onBack }) {
         const data = await checkedJson(await apiFetch('/cycle', { method: 'POST' }))
         last = data
 
-        if (data.report?.replanned_this_cycle) {
-          setReplanFlash(true)
-          await wait(150)
-          setReplanFlash(false)
-        }
+        setReplanFlash(!!data.report?.replanned_this_cycle)
         setStepIndex(4)
         setState(data)
         setCyclesRun(i)
@@ -123,7 +119,7 @@ export default function Dashboard({ onBack }) {
         setSimStatusText(
           `Hour ${i}/${totalHours} — solar ${(data.decision?.solar_used_kw || 0).toFixed(1)} kW, `
           + `grid ${(data.decision?.grid_used_kw || 0).toFixed(1)} kW`
-          + (data.report?.replanned_this_cycle ? ' — replanned' : '')
+          + (data.report?.replanned_this_cycle ? ' — forecast missed, planned cautiously' : '')
           + (data.reasoning ? ` — "${data.reasoning}"` : '')
         )
       }
@@ -172,10 +168,9 @@ export default function Dashboard({ onBack }) {
       const data = await checkedJson(await apiFetch('/cycle', { method: 'POST' }))
       cancelled = true
 
-      if (data.report?.replanned_this_cycle) {
-        setStepIndex(1); setReplanFlash(true)
-        await wait(550); setStepIndex(3); await wait(300)
-      }
+      // The forecast check happens before the decision, so there's no loop to animate:
+      // just mark the Allocate step when this hour was planned cautiously.
+      setReplanFlash(!!data.report?.replanned_this_cycle)
       setStepIndex(4)
 
       setState(data)
@@ -196,7 +191,7 @@ export default function Dashboard({ onBack }) {
       cancelled = true
       setError(errorMessage(err))
     } finally {
-      setLoading(false); setReplanFlash(false)
+      setLoading(false)   // the "forecast missed" marker stays until the next hour runs
     }
   }
 
@@ -356,14 +351,14 @@ export default function Dashboard({ onBack }) {
             </h1>
             <p className="text-muted-foreground text-[clamp(0.95rem,1.4vw,1.1rem)] leading-relaxed max-w-xl mx-auto mb-2">
               An AI agent reads sunlight, prices and demand, decides how to split power between
-              solar, battery and grid, and replans the moment its own forecast turns out wrong.
+              solar, battery and grid, and plans more cautiously when its own forecast turns out wrong.
             </p>
 
             <PipelineStepper stepIndex={stepIndex} replanFlash={replanFlash} />
             <p className="pipeline-caption">
-              Each hour: sense real conditions → the agent proposes a split → hard safety rules can
-              override it → battery state updates → if the forecast was wrong, it loops back and
-              replans before reporting.
+              Each hour: sense real conditions and check last hour's forecast → the agent proposes a
+              split (more cautiously if the forecast missed) → hard safety rules can override it →
+              battery state updates once → report.
             </p>
 
             {error && (
@@ -401,7 +396,7 @@ export default function Dashboard({ onBack }) {
                 "{state.reasoning}"
                 {report?.replanned_this_cycle && (
                   <Badge variant="destructive" className="mt-2.5 font-mono text-[0.65rem] tracking-wider uppercase block w-fit">
-                    Replanned — forecast deviation detected
+                    Forecast missed{report.forecast_miss_kw != null ? ` by ${Math.abs(report.forecast_miss_kw).toFixed(1)} kW` : ''} — planned cautiously
                   </Badge>
                 )}
               </blockquote>
@@ -472,7 +467,7 @@ export default function Dashboard({ onBack }) {
         </main>
 
         <footer className="mt-auto text-center px-4 py-8 border-t border-border font-mono text-xs tracking-wide text-muted-foreground">
-          <span className="block">Sense → Allocate → Safety limits → Apply → Replan if needed → Report</span>
+          <span className="block">Sense → Check forecast → Allocate → Safety limits → Apply → Report</span>
           <span className="block mt-2">
             <a href="https://open-meteo.com/" target="_blank" rel="noreferrer" className="underline underline-offset-4 hover:text-foreground">Weather data by Open-Meteo.com</a>
             {' · '}Simulation only, not for real equipment{' · '}

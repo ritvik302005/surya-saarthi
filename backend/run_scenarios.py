@@ -20,6 +20,13 @@ import main
 SUMMARY_ONLY = "--summary-only" in sys.argv
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 DAYS = int(args[0]) if args else 2
+SEED = 1   # same clouds and demand noise every run, so results can be reproduced
+
+# This is an offline benchmark, not the public demo: never let the demo's AI budget
+# quietly turn hours into fixed-rule fallback hours.
+config.AI_HOURS_PER_DAY = None
+config.AI_HOURS_PER_SESSION_PER_DAY = None
+config.REQUESTS_PER_MINUTE_PER_SESSION = None
 OUT_DIR = "sample_results"
 SUMMARY_PATH = os.path.join("..", "frontend", "src", "data", "results-summary.json")
 os.makedirs(OUT_DIR, exist_ok=True)
@@ -70,17 +77,20 @@ if SUMMARY_ONLY:
 client = TestClient(main.app)
 rows = []
 for scenario in config.WEATHER_SCENARIOS:
-    result = client.post("/simulate", json={"scenario": scenario, "days": DAYS},
+    result = client.post("/simulate", json={"scenario": scenario, "days": DAYS, "seed": SEED},
                          headers={"X-Session-Id": f"scenario-{scenario}"}).json()
     with open(os.path.join(OUT_DIR, f"{scenario}.json"), "w", encoding="utf-8") as f:
         json.dump(result, f, indent=1)
     s, c = result["summary"], result["summary"]["vs_rule_based"]
     rows.append((scenario, c, s))
     print(f"done: {scenario}", flush=True)
+    if c["ai_fallback_hours"]:
+        print(f"WARNING: {scenario} had {c['ai_fallback_hours']} fixed-rule fallback hours "
+              "(AI unavailable) - these results don't measure the AI alone.", flush=True)
 
 print(f"\n{DAYS}-day runs per scenario")
 header = ("scenario", "grid kWh agent/rules", "less grid", "net cost agent/rules (Rs)", "extra saved",
-          "solar kWh", "self-use agent/rules", "export kWh", "CO2 avoided kg", "replans", "overrides", "AI fallbacks")
+          "solar kWh", "self-use agent/rules", "export kWh", "CO2 avoided kg", "forecast misses", "overrides", "AI fallbacks")
 print(" | ".join(header))
 for scenario, c, s in rows:
     print(" | ".join(str(x) for x in (

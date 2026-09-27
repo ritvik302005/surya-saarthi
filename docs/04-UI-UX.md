@@ -49,7 +49,7 @@ Landing (/)                       Dashboard (same URL, view state)
 ├─ The problem                               ├─ Intro + pipeline stepper
 ├─ How it decides (6 stages)                 ├─ Situation panel
 ├─ What it manages                           ├─ Energy flow + deferred jobs strip
-├─ Who it's for                              ├─ Reasoning quote (+ "Replanned" badge)
+├─ Who it's for                              ├─ Reasoning quote (+ "Forecast missed" badge)
 ├─ Safety statement                          ├─ Cards: Battery reserve · Safety overrides · Session impact
 ├─ FAQ                                       ├─ Agent vs rule-based card (+ CSV link)
 ├─ Live-demo CTA                             ├─ Power-mix history chart
@@ -70,7 +70,7 @@ Single-page app; `App.jsx` switches `landing` ↔ `dashboard`, and shows the Pri
 | Hero | Badge "SDG 7 · Affordable & Clean Energy"; H1 "The sun doesn't send an invoice. Many microgrids waste it anyway."; plain-language sub-line; liquid-glass CTA *See it decide →*; scroll cue | WebGL background at 60% opacity (lazy, hidden for reduced motion) |
 | Results strip | 4 tiles from `src/data/results-summary.json` (written by `run_scenarios.py`): cost reduction range, grid reduction range, ₹ saved/day vs rules, essential-load outages; note line with method | Hidden while the summary has no scenarios, so unvalidated numbers never show |
 | The problem | Eyebrow, H2 statement ("Many rooftop and campus solar systems…"), two paragraphs (PM Surya Ghar; 2023 ToD rules: solar hours at least 20% cheaper, peak 10–20% costlier, set by each state; we assume 20%) | Claims stay hedged ("many", "often"); no unsourced comparisons |
-| How it decides | Six numbered rows: Sense, Allocate, Safety limits, Apply, Replan, Report | Reveal on scroll |
+| How it decides | Six numbered rows: Sense, Check forecast, Allocate, Safety limits, Apply, Report | Reveal on scroll |
 | What it manages | Five small cards: Solar, Battery, Grid (import/export), Water pump, EV charging | Icon + one line each |
 | Who it's for | Three cards: Rooftop homes (PM Surya Ghar), Campuses, Village/farm microgrids | |
 | Safety statement | "It can reason. It cannot override a 20% reserve." + paragraph ending "The model suggests; the rules decide." | Centered |
@@ -96,22 +96,22 @@ Skip link moves focus to `<main>` directly (a normal `#anchor` would change the 
 | Region | Content | Behaviour |
 |---|---|---|
 | Header (sticky) | Outlined group `role="group"` "Simulate whole days": scenario select (from `/scenarios`), days input (1–7), *Simulate N days* (secondary, tooltip; label follows the days input). Then *← Overview*, *History report*, *Reset session* (tooltip), *Run 1 hour* (primary, tooltip) | The group keeps the multi-day controls visibly separate from the one-hour button. Below 640 px the "days" text is hidden (the button already says it). Status dot: grey idle, pulsing solar while computing, battery-green when a state exists. Controls disabled while a simulation runs. |
-| Progress bar | "Simulating {scenario}… i/N hours", bar, latest status line (solar, grid, replanned, reasoning) | Only while simulating |
-| Intro | Badge "Live agent · SDG 7 · Clean energy", H1, sub-line, pipeline stepper, caption | Stepper: pending/active/done per stage; "↻ replanning" on Allocate |
-| Situation panel | 4 tiles: **Time** (HH:00, Day n · scenario), **Sunlight** (kW now; "forecast said X kW" — red + "so it replans" when miss > 1 kW), **Grid price** (₹/kWh; band text coloured: solar hours = battery, peak = grid, normal = muted), **Demand** (essential kW; jobs running · waiting) | 2 columns on mobile, 4 on desktop |
+| Progress bar | "Simulating {scenario}… i/N hours", bar, latest status line (solar, grid, forecast missed, reasoning) | Only while simulating |
+| Intro | Badge "Live agent · SDG 7 · Clean energy", H1, sub-line, pipeline stepper, caption | Stepper: pending/active/done per stage; "forecast missed: cautious" on Allocate when flagged |
+| Situation panel | 4 tiles: **Time** (HH:00, Day n · scenario), **Sunlight** (kW now; "forecast said X kW" — red + "so it plans cautiously" when miss > 1 kW), **Grid price** (₹/kWh; band text coloured: solar hours = battery, peak = grid, normal = muted), **Demand** (essential kW; jobs running · waiting) | 2 columns on mobile, 4 on desktop |
 | Legend + energy flow | Solar / Battery / Grid (last resort) legend; SVG with three source nodes, load node, animated dashed paths (width ∝ kW), solar→battery arc when charging ("kW in"), "↑ exporting X kW" under Grid | Dimmed node when ≈ 0 kW; count-up numbers |
 | Deferred strip | "Deferred this cycle" + chips "ev charging (21:00) · until 06:00" | Only if any deferred |
-| Reasoning | Quoted sentence; red "Replanned — forecast deviation detected" badge when applicable | |
+| Reasoning | Quoted sentence; red "Forecast missed by X kW — planned cautiously" badge when applicable; fixed-rule hours say so in the sentence | |
 | Cards row | **Battery reserve** (ring gauge, red ≤ 22%) · **Safety overrides this cycle** (list, or "No overrides triggered…") · **Session impact** (₹ saved vs grid-only, kg CO₂ avoided, cycles run) | 1 column mobile, 3 desktop |
 | Agent vs rule-based | Two bars (agent vs rules grid kWh); stats: % less grid, ₹ saved vs rules, renewable share, overrides/AI-fallback hours; second row: solar generated, self-use % (rules in caption), exported kWh, wasted kWh; *Download results (CSV)* | Appears after the first cycle |
-| History chart | Three lines (solar, battery, grid) for last 20 cycles; hover line + tooltip; ring marker on replanned cycles | |
-| History modal | Newest first: cycle, timestamp, replanned badge, metrics, reasoning, alerts; *Download log (.txt)* | Scrollable, max 82vh |
+| History chart | Three lines (solar, battery, grid) for last 20 cycles; hover line + tooltip; ring marker on forecast-miss hours | |
+| History modal | Newest first: cycle, timestamp, forecast-missed badge, metrics, reasoning, alerts; *Download log (.txt)* | Scrollable, max 82vh |
 
 ## 5. Key user flows
 
 **F1 — Run one cycle**
 1. Click *Run 1 hour* → button shows "Computing…", stepper animates Sense → Allocate → Safety → Apply (≈ 420 ms each).
-2. Response arrives → if replanned, stepper jumps back to Allocate with "↻ replanning" for ~550 ms.
+2. Response arrives → if the forecast missed, Allocate shows "forecast missed: cautious" until the next hour (no loop to animate: the check happens before the decision).
 3. Stepper lands on Report; all regions update; totals add this cycle.
 
 **F2 — Run a simulation**
@@ -194,7 +194,7 @@ Below 640 px the header is two rows (brand; controls) and Overview / History rep
 - Visible focus ring (`--ring` = battery green).
 - Body text contrast ≥ 4.5:1 (muted `#8b8f94` on `#0e0f10` ≈ 5.8:1).
 - Energy flow has `aria-label`; stepper is `role="list"`. Planned: text alternative listing kW values under the SVG for screen readers.
-- Colour is never the only signal: overrides are text, replans have a badge, price band has a label.
+- Colour is never the only signal: overrides are text, forecast misses have a badge, price band has a label.
 - `prefers-reduced-motion` respected (backgrounds hidden, no count-up, no reveal).
 - Hit targets ≥ 32 px high for header buttons.
 - Every form control has a programmatic label (checked with an accessibility-tree snapshot: `combobox "Weather scenario"`, `spinbutton "Days to simulate (1 to 7)"`).
@@ -213,7 +213,7 @@ Below 640 px the header is two rows (brand; controls) and Overview / History rep
 | `--secondary` | `rgba(255,255,255,0.06)` | Inputs, subtle fills |
 | `--solar` | `#ffb648` | Solar values, export |
 | `--battery` / `--accent` / `--ring` | `#4fd8c4` | Battery, positive results, eyebrows, focus |
-| `--grid` / `--destructive` | `#ff6b5c` | Grid import, peak price, errors, replans |
+| `--grid` / `--destructive` | `#ff6b5c` | Grid import, peak price, errors, forecast misses |
 
 ### Typography
 | Role | Font | Size |

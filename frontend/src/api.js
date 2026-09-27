@@ -29,7 +29,11 @@ export function apiFetch(path, options = {}) {
 export const sessionUrl = (path) => `${API_URL}${path}?session=${encodeURIComponent(SESSION_ID)}`
 
 export async function checkedJson(res) {
-  if (!res.ok) throw new Error(`The backend returned an error (${res.status}). Check the server log.`)
+  if (!res.ok) {
+    // Prefer the server's own explanation (e.g. the rate-limit message) when it sends one.
+    const body = await res.json().catch(() => null)
+    throw new Error(body?.error || `The backend returned an error (${res.status}). Check the server log.`)
+  }
   return res.json()
 }
 

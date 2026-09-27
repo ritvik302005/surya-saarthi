@@ -14,9 +14,13 @@ class GridState(TypedDict):
     forecast_solar_kw: float
     solar_forecast_next_hours: List[float]
     previous_forecast_kw: Optional[float]
+    forecast_miss_kw: Optional[float]   # actual solar minus last hour's forecast for it
+    seed: Optional[int]                 # makes clouds and demand repeatable for a run
     decision: Dict
     reasoning: str
-    deviation_detected: bool
-    replanned: bool
+    replanned: bool                     # forecast missed by > DEVIATION_THRESHOLD_KW, so planned cautiously
+    ai_blocked_reason: Optional[str]    # set by the server when the AI budget is used up
+    ai_used: bool                       # the LLM was called this hour
+    ai_fallback: bool                   # the fixed rule decided this hour instead of the LLM
     alerts: List[str]
     report: Dict

@@ -28,7 +28,7 @@ Two deployable units, two external services. No database.
 | Frontend | React 19, Vite 8, Tailwind CSS 4, Base UI / shadcn-style components | Fast static build; component primitives with accessible defaults |
 | Visuals | Hand-written SVG (energy flow, chart, gauge); three.js + simplex-noise for landing backgrounds only (lazy-loaded) | No chart library needed for three series; heavy visuals kept off the critical path |
 | Backend | Python 3.11+ , FastAPI, Uvicorn | Simple typed HTTP API; sync endpoints run in a thread pool |
-| Agent orchestration | LangGraph (`StateGraph`) | Makes the sense → allocate → safety → apply → (replan) → report loop explicit, including the conditional back-edge |
+| Agent orchestration | LangGraph (`StateGraph`) | Makes the sense (+ forecast check) → allocate → safety → apply → report pipeline explicit; one pass per hour |
 | LLM client | `langchain-groq` → Groq `openai/gpt-oss-20b`, strict JSON schema, `reasoning_effort=low` | Fast, low-cost inference; schema-constrained output |
 | Weather | Open-Meteo forecast API (no key) | Free, real irradiance, 8-day horizon |
 | State | In-process memory, one `Session` object per browser tab | MVP demo needs no persistence; avoids operating a DB |
@@ -55,8 +55,7 @@ flowchart TB
     M[main.py<br/>FastAPI routes, sessions,<br/>history, comparison, CSV]
     G[graph.py<br/>LangGraph wiring]
     subgraph Nodes [nodes/]
-      SE[sensing.py] --> AL[allocation.py] --> SA[safety.py] --> AP[apply.py]
-      AP -- deviation --> AL
+      SE[sensing.py<br/>+ forecast check] --> AL[allocation.py] --> SA[safety.py] --> AP[apply.py]
       AP --> RE[report.py]
     end
     B[baseline.py<br/>rule-based controller]
@@ -72,13 +71,13 @@ flowchart TB
 |---|---|---|
 | `config.py` | Single source of every tunable: time step, reserve, rates, tariff, export, CO₂ factor, model, scenarios, site | Change behaviour here, not in node code |
 | `state.py` | `GridState` TypedDict. LangGraph drops keys not declared here | Add a field here before any node returns it |
-| `nodes/sensing.py` | Irradiance fetch/cache/refresh, forecast + noise, demand profile, flexible-job arrival and carry-over, tariff | Deterministic except demand/cloud noise |
-| `nodes/allocation.py` | Build prompt, call LLM with retry, extract + validate JSON, fallback | Never trusted — output always goes to safety |
+| `nodes/sensing.py` | Irradiance fetch/cache/refresh, forecast + noise, demand profile, flexible-job arrival and carry-over, tariff, **forecast check** (`forecast_miss_kw`, `replanned`) | Noise is keyed on (seed, hour), so runs are repeatable |
+| `nodes/allocation.py` | Build prompt, call LLM with retry, extract + validate JSON; fixed-rule fallback when the AI fails or the budget is used up | Never trusted — output always goes to safety |
 | `nodes/safety.py` | Checks 0–5 (SRS FR-SF0–SF8) | Pure function of state; fully unit-tested offline |
-| `nodes/apply.py` | Update SOC, mark deferrals, detect forecast deviation, decide replan (max once) | |
+| `nodes/apply.py` | Update SOC once, mark deferrals | Exactly once per hour (`test_cycle_accounting.py`) |
 | `nodes/report.py` | Per-cycle cost, export credit, savings, CO₂, solar accounting | |
 | `baseline.py` | Fixed-rule controller on identical inputs | Must stay "fair": same limits and export as the agent |
-| `main.py` | Routes, per-session state + locks + LRU, history entries, comparison summary, CSV/text export, server log | Only place with global state (`_sessions`) |
+| `main.py` | Routes, per-session state + locks + LRU, seeds, AI budgets, rate limit, CORS origins, history entries, comparison summary, CSV/text export, server log | Only place with global state (`_sessions`, `_ai_hours_all_sessions`) |
 | `api.js` | Per-tab session id (`sessionStorage`), `apiFetch`, error messages | All frontend HTTP goes through here |
 
 ## 4. Data flow — one cycle
@@ -95,14 +94,15 @@ sequenceDiagram
   API->>GR: invoke(session.state + sim_hour, scenario)
   GR->>OM: (cached) hourly irradiance
   GR->>GR: sense: solar, 8h forecast, demand, jobs, price
-  GR->>LLM: allocate prompt (strict JSON)
-  LLM-->>GR: decision (or retry / fallback)
-  GR->>GR: safety checks 0–5
-  GR->>GR: apply: SOC, deferrals, deviation?
-  alt |actual − forecast| > 1 kW and not yet replanned
-    GR->>LLM: allocate again (conservative)
-    GR->>GR: safety, apply
+  GR->>GR: forecast check: miss > 1 kW → plan cautiously
+  alt AI budget left
+    GR->>LLM: allocate prompt (strict JSON)
+    LLM-->>GR: decision (or retry / fixed-rule fallback)
+  else budget used up
+    GR->>GR: fixed-rule decision (no LLM call)
   end
+  GR->>GR: safety checks 0–5
+  GR->>GR: apply: SOC (once), deferrals
   GR->>GR: report: cost, export, CO₂, solar use
   GR-->>API: new state
   API->>API: rule-based step, history entry, comparison, log
@@ -175,7 +175,7 @@ Free-tier notes: Render sleeps after inactivity (~50 s cold start) — open `/he
 Kept deliberately light for the MVP:
 - **Health:** `/health` checked by Render; optional external uptime ping.
 - **Logs:** Uvicorn access log + `ALLOCATION ERROR` tracebacks in the Render log stream; per-cycle entries in `surya_saarthi_log.txt`.
-- **Product signals already computed per run:** `ai_fallback_hours`, `safety_override_hours`, replans. A rising fallback count means API or quota trouble.
+- **Product signals already computed per run:** `ai_fallback_hours`, `safety_override_hours`, forecast-miss hours. A rising fallback count means API or quota trouble.
 - Next step if needed: structured JSON logs and a simple counter endpoint (`/metrics`) — not a full observability stack.
 
 ## 11. Scalability

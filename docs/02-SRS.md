@@ -51,8 +51,8 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 | FR-A3 | A response shall be rejected if any power value is missing, non-numeric, boolean or non-finite; if `defer_loads` is not a list of strings; if `reasoning` is empty; or if it defers an unknown job. | `test_allocation_parsing.py` | Done |
 | FR-A4 | JSON wrapped in code fences or prose shall be extracted before validation. | Fenced JSON accepted | Done |
 | FR-A5 | Rate-limit (429), malformed-JSON and 503/timeout errors shall be retried up to `LLM_MAX_ATTEMPTS` (4), waiting the delay stated in the 429 message (+0.25 s, max 20 s) or exponential back-off. | Fake LLM raising 429 twice then succeeding → decision used | Done |
-| FR-A6 | If no valid response is obtained, the system shall use a deterministic fallback: solar to essential load, rest from grid, defer every non-`must_run` job, and add an alert starting `Safety override: allocator output was unavailable`. | Fake LLM returns prose → fallback + 1 alert | Done |
-| FR-A7 | On a replan, the prompt shall include "The last forecast was inaccurate. Preserve more battery reserve for uncertainty." | Unit test with `replanned=True` | Done |
+| FR-A6 | If no valid response is obtained, or the server's AI budget is used up (`ai_blocked_reason`), the system shall use the **fixed rule** (same logic as the rule-based baseline): solar, then battery down to the reserve within the rate limit, then grid; no job deferred. It sets `ai_fallback` and adds an alert starting `AI fallback:`. When the budget is used up the LLM is not called. | `test_allocation_parsing.py`; `test_cycle_accounting.py` (AI off == baseline in all scenarios) | Done |
+| FR-A7 | When the forecast missed (`replanned`), the prompt shall state this hour's actual solar and last hour's forecast for it, and ask the agent to keep more battery in reserve. | `test_apply.py` (live) | Done |
 
 ### 3.3 Safety layer (applied after every allocation, in this order)
 
@@ -68,14 +68,14 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 | FR-SF7 | Differences ≤ 0.01 kW shall not trigger overrides or alerts. | "shifted 0.0 kW" never appears in a 2-day run | Done |
 | FR-SF8 | Battery power of exactly zero shall be reported as `0.0`, never `-0.0`. | Night hours in a run | Done |
 
-### 3.4 Apply, replan, report
+### 3.4 Forecast check, apply, report
 
 | ID | Requirement | Test | Status |
 |---|---|---|---|
 | FR-R1 | New SOC = old SOC − battery kW × 1 h / capacity × 100, clamped to [0, 100]. | 60%, 2 kW discharge, 10 kWh → 40% | Done |
 | FR-R2 | Jobs named in `defer_loads` shall be marked `deferred: true`; others `false`. | `test_apply.py` | Done |
-| FR-R3 | If |actual solar − previous cycle's forecast for this hour| > 1.0 kW and the cycle has not replanned, the system shall replan once (back to allocate). | `test_forced_deviation.py`; replans appear in multi-day runs | Done |
-| FR-R4 | Report shall include: served load (essential + non-deferred jobs), import cost, export credit, net cost, baseline (grid-only) cost, savings, CO₂ avoided (0.71 kg/kWh, export counted as avoided), solar available/self-used/curtailed, deferred jobs, alerts, replanned flag. | Case 9, 11 | Done |
+| FR-R3 | Sensing shall compute `forecast_miss_kw` = actual solar − last cycle's forecast for this hour, and set `replanned` ("forecast missed") when its magnitude > 1.0 kW, **before** allocation. Each hour is decided and applied exactly once (the old loop back from apply to allocate applied the battery twice). | `test_safety_rules.py` 9b; `test_cycle_accounting.py` (SOC moves once per hour over 48 h) | Done |
+| FR-R4 | Report shall include: served load (essential + non-deferred jobs), import cost, export credit, net cost, baseline (grid-only) cost, savings, CO₂ avoided (0.71 kg/kWh, export counted as avoided), solar available/self-used/curtailed, deferred jobs, alerts, replanned (forecast-missed) flag and `forecast_miss_kw`. | Case 9, 11 | Done |
 
 ### 3.5 Rule-based comparison
 
@@ -102,7 +102,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 |---|---|---|---|
 | FR-UI1 | Each browser tab shall create a session id (stored in `sessionStorage`) and send it on every API call. | Two tabs → different ids in request headers | Done |
 | FR-UI2 | On load, the dashboard shall restore state, chart (last 20 cycles), totals and scenario from `/state` and `/history`. | Run 3 cycles, refresh → 3 cycles shown | Done |
-| FR-UI3 | "Run 1 hour" shall animate pipeline steps and show replanning when it happens. | Visual | Done |
+| FR-UI3 | "Run 1 hour" shall animate pipeline steps and mark Allocate "forecast missed: cautious" when the forecast missed. | Visual | Done |
 | FR-UI4 | "Simulate N days" (label follows the days input) shall reset, then call `/cycle` N times, updating progress (hour i/N) and the latest reasoning after each hour. | 1 day → progress reaches 24/24 | Done |
 | FR-UI5 | The situation panel shall show hour + day + scenario, solar now vs forecast (highlight when miss > 1 kW), price + band, essential demand + jobs running/waiting. | Visual at 19:00 → ₹9.60 "Evening peak" | Done |
 | FR-UI6 | The energy flow shall show solar→load, battery→load, grid→load, solar→battery when charging, and "exporting X kW" when exporting. | Noon on sunny day shows charging/export | Done |
@@ -129,7 +129,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 `sim_hour` int ≥ 0 · `scenario` ∈ {sunny, normal, cloudy, monsoon} · `solar_kw` ≥ 0 · `forecast_solar_kw` ≥ 0 · `solar_forecast_next_hours` float[8] · `previous_forecast_kw` float|null · `battery_soc_pct` [0,100] · `battery_capacity_kwh` > 0 · `critical_load_kw` > 0 · `flexible_loads[]` {name, power_kw > 0, deadline "HH:MM", deadline_hour 0–23, deferred bool, must_run bool} · `new_flexible_loads[]` · `grid_price_per_kwh` > 0 · `price_band` · `decision` {solar_used_kw ≥ 0, battery_used_kw, grid_used_kw ≥ 0, grid_export_kw ≥ 0, solar_curtailed_kw ≥ 0, defer_loads[], reasoning} · `reasoning` · `alerts[]` · `deviation_detected` · `replanned` · `report` · `comparison`.
 
 ### 5.2 Cycle history entry (per cycle)
-`cycle`, `sim_hour`, `scenario`, `timestamp`, `solar_kw`, `battery_kw`, `grid_kw`, `export_kw`, `load_kw`, `deferred_loads[]`, `battery_soc_pct`, `reasoning`, `alerts[]`, `replanned`, `savings_rs`, `carbon_avoided_kg`, `grid_price_rs`, `agent_cost_rs` (net), `solar_available_kw`, `solar_self_used_kw`, `solar_curtailed_kw`, `rule_grid_kw`, `rule_cost_rs` (net), `rule_export_kw`, `rule_solar_self_used_kw`, `ai_fallback`.
+`cycle`, `sim_hour`, `scenario`, `timestamp`, `solar_kw`, `battery_kw`, `grid_kw`, `export_kw`, `load_kw`, `deferred_loads[]`, `battery_soc_pct`, `reasoning`, `alerts[]`, `replanned`, `savings_rs`, `carbon_avoided_kg`, `grid_price_rs`, `agent_cost_rs` (net), `solar_available_kw`, `solar_self_used_kw`, `solar_curtailed_kw`, `rule_grid_kw`, `rule_cost_rs` (net), `rule_export_kw`, `rule_solar_self_used_kw`, `ai_fallback`, `forecast_miss_kw`, `seed`.
 
 ### 5.3 Persistence and retention
 - Session state and history: in memory only; lost on server restart; evicted by LRU (FR-API2).
@@ -170,7 +170,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 
 1. Night: solar = 0 → no solar used, no export, no charging.
 2. Battery at 20%: no discharge; at 100%: no charging, surplus exported.
-3. First cycle: `previous_forecast_kw` is null → no replan.
+3. First cycle: `previous_forecast_kw` is null → `forecast_miss_kw` null, not flagged.
 4. Several deferred jobs with the same deadline → all run by the deadline (may raise grid use that hour).
 5. Deadline wraps midnight (EV 22:00 → 06:00).
 6. AI defers a `must_run` job → removed (FR-SF0).
@@ -178,7 +178,7 @@ There are **no user accounts** in the MVP. Isolation is by session id, not ident
 8. AI returns negative solar or grid → clamped to 0.
 9. Surplus larger than export limit → remainder curtailed.
 10. 101st session → oldest evicted.
-11. Scenario switched on reset mid-day → forecast deviation may trigger a replan on the next cycle.
+11. Scenario switched on reset mid-day → the next cycle's forecast check may flag a miss (planned cautiously).
 12. Page refresh during a simulation → loop stops; server keeps completed cycles; dashboard restores them.
 
 ## 10. Non-functional requirements

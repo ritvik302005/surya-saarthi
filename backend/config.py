@@ -1,7 +1,25 @@
+import os
+
 CYCLE_HOURS = 1.0               # each planning cycle represents one simulated hour (sim_hour advances by 1)
 BATTERY_RESERVE_PCT = 20.0      # never discharge the battery below this level
 INITIAL_BATTERY_SOC_PCT = 60.0  # battery level at the start of every run (agent and baseline)
-DEVIATION_THRESHOLD_KW = 1.0    # forecast vs actual gap that triggers a replan
+DEVIATION_THRESHOLD_KW = 1.0    # forecast miss (actual vs last hour's forecast) that makes this hour's plan cautious
+
+
+def _env_limit(name, default):
+    """Positive integer from the environment; 0 or a negative value means no limit (None)."""
+    raw = os.getenv(name, "").strip()
+    value = int(raw) if raw else default
+    return value if value > 0 else None
+
+
+# --- Public-demo protection (set these on the server; run_scenarios.py lifts the AI limits) ---
+# Groq's free tier allows ~200k tokens/day; one AI-decided hour uses roughly 1k tokens
+# (estimate from past runs), so the whole demo gets 150 AI hours per rolling 24 h. Past a
+# limit, hours are decided by the fixed rule instead and marked as AI fallback.
+AI_HOURS_PER_DAY = _env_limit("AI_HOURS_PER_DAY", 150)
+AI_HOURS_PER_SESSION_PER_DAY = _env_limit("AI_HOURS_PER_SESSION_PER_DAY", 48)
+REQUESTS_PER_MINUTE_PER_SESSION = _env_limit("REQUESTS_PER_MINUTE_PER_SESSION", 300)
 
 # --- LLM + impact accounting ---
 LLM_MODEL = "openai/gpt-oss-20b"        # Groq model used by the allocate node

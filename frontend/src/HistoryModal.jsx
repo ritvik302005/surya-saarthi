@@ -42,7 +42,7 @@ export default function HistoryModal({ open, onOpenChange }) {
               <div className="history-row-top">
                 <span className="history-cycle font-display">Cycle {c.cycle}</span>
                 <span className="history-time font-mono">{c.timestamp}</span>
-                {c.replanned && <Badge variant="destructive" className="font-mono text-[0.6rem] uppercase">↻ replanned</Badge>}
+                {c.replanned && <Badge variant="destructive" className="font-mono text-[0.6rem] uppercase">forecast missed</Badge>}
               </div>
               <div className="history-row-metrics font-mono">
                 <span style={{ color: 'var(--solar)' }}>Solar {c.solar_kw} kW</span>
