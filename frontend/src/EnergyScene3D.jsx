@@ -15,14 +15,14 @@ const HIDDEN = new THREE.Vector3(0, -100, 0)
 const POS = {
   solar: new THREE.Vector3(-5.9, 0, -1.0),
   tower: new THREE.Vector3(-1.9, 0, -3.3),
-  battery: new THREE.Vector3(-0.35, 0, 1.3),
+  battery: new THREE.Vector3(0.9, 0, 1.9),    // front-right of the tower, so the solar line to the house passes clear of both
   genset: new THREE.Vector3(-2.9, 0, 3.0),
   house: new THREE.Vector3(3.9, 0, 0.3),
 }
 const ANCHOR = {
   solar: new THREE.Vector3(-5.9, 2.3, -1.4),
   grid: new THREE.Vector3(-0.35, 3.0, -3.3),   // beside the tower top, leaving the sky above it clear for the sun
-  battery: new THREE.Vector3(-0.35, 2.0, 1.3),
+  battery: new THREE.Vector3(0.9, 2.3, 1.9),
   genset: new THREE.Vector3(-2.9, 0, 3.45),
   house: new THREE.Vector3(3.9, 2.8, 0.3),
 }
@@ -442,13 +442,15 @@ export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGen
     const V = (x, y, z) => new THREE.Vector3(x, y, z)
     const houseIn = V(2.9, 0.8, 0.6)
     const flows = {
-      solarLoad: makeFlow(scene, [V(-4.4, 1.2, -0.7), V(-2.2, 2.3, -1.2), V(1.0, 2.0, -0.4), houseIn], COLOR.solar, sprite),
-      batteryLoad: makeFlow(scene, [V(0.3, 0.9, 1.4), V(1.2, 1.2, 1.3), V(2.1, 1.0, 1.0), houseIn], COLOR.battery, sprite),
-      gridLoad: makeFlow(scene, [V(-1.4, 2.35, -3.2), V(0.4, 2.4, -2.3), V(2.0, 1.6, -0.8), houseIn], COLOR.grid, sprite),
-      gensetLoad: makeFlow(scene, [V(-2.2, 0.7, 3.0), V(-0.4, 0.8, 3.0), V(1.6, 0.9, 2.1), houseIn], COLOR.genset, sprite),
-      solarBattery: makeFlow(scene, [V(-4.4, 0.8, 0.0), V(-2.6, 1.3, 0.9), V(-0.9, 1.0, 1.3)], COLOR.solar, sprite),
+      // Solar to the house runs low in front of the tower's base (never through the tower, so it
+      // can't be mistaken for export), then over the battery to the house.
+      solarLoad: makeFlow(scene, [V(-4.3, 0.9, -0.4), V(-1.9, 0.55, -0.7), V(0.2, 1.05, -0.2), V(1.6, 1.3, 0.1), houseIn], COLOR.solar, sprite),
+      batteryLoad: makeFlow(scene, [V(1.5, 0.9, 1.9), V(2.1, 1.0, 1.4), houseIn], COLOR.battery, sprite),
+      gridLoad: makeFlow(scene, [V(-1.4, 2.35, -3.2), V(0.6, 2.6, -2.4), V(2.2, 1.8, -0.9), houseIn], COLOR.grid, sprite),
+      gensetLoad: makeFlow(scene, [V(-2.2, 0.6, 3.1), V(0.0, 0.5, 3.2), V(1.9, 0.6, 2.4), houseIn], COLOR.genset, sprite),
+      solarBattery: makeFlow(scene, [V(-4.4, 0.8, 0.1), V(-2.0, 0.9, 1.1), V(0.3, 1.0, 1.8)], COLOR.solar, sprite),
       solarGrid: makeFlow(scene, [V(-5.4, 1.6, -1.8), V(-4.0, 2.6, -2.9), V(-2.4, 2.3, -3.3)], COLOR.solar, sprite),
-      gensetBattery: makeFlow(scene, [V(-2.3, 0.9, 2.6), V(-1.5, 1.2, 2.0), V(-0.8, 1.0, 1.5)], COLOR.genset, sprite),
+      gensetBattery: makeFlow(scene, [V(-2.3, 0.9, 2.7), V(-1.0, 1.0, 2.5), V(0.35, 0.9, 2.1)], COLOR.genset, sprite),
     }
 
     const smokeN = 14

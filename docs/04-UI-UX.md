@@ -125,11 +125,11 @@ What is stored · What is sent where (Groq: simulated numbers in AI mode and the
 
 ### 6.1 3D energy scene
 - View: perspective 3D with soft shadows and a floor grid; the camera drifts slowly (still under reduced motion); narrower screens step back and aim right so the house stays in view. The ground is turned to face the camera, so its far edge is a level horizon.
-- Layout: solar array (left), tower (back-centre, wires leaving the scene; its label beside the top), battery cabinet (centre, charge bar), genset (front-left, its label below it), house (right). Labels don't overlap on desktop or phone.
+- Layout: solar array (left), tower (back-centre, wires leaving the scene; its label beside the top), battery cabinet (front-right of the tower, charge bar), genset (front-left, its label below it), house (right). Labels don't overlap on desktop or phone.
 - Sky (HTML layer behind the canvas, down to the horizon): colour follows the simulated hour, night → dawn → bright day → dusk → night; the ground and lights brighten by day; the sun crosses from left (morning) to right (evening) and glows more with more solar output; a moon at night.
 - Weather (the run's scenario): sunny = clear; normal = 2 light clouds; cloudy = greyer sky, 4 grey clouds, dimmer sun and light; monsoon = greyest, 6 clouds. Clouds drift slowly (still under reduced motion) and turn dark at night.
 - Corner chip: "☀ 13:00 · day · clear", with morning / evening / "☾ night" and the weather.
-- Flows: only lines that carry power are drawn (solar, battery, grid, genset to the house, plus solar→battery, solar→grid export, genset→battery); lighter dots move along them, more and faster with more kW.
+- Flows: only lines that carry power are drawn (solar, battery, grid, genset to the house, plus solar→battery, solar→grid export, genset→battery); lighter dots move along them, more and faster with more kW. Solar→house runs low in front of the tower base, so it is never mistaken for export (only the solar→grid line touches the tower).
 - States: power cut = dark tower, blinking red beacon, genset shaking with smoke and a green lamp; unserved load = flickering windows; house windows lit by the power it gets.
 - Labels are HTML (crisp, themed), positioned from the 3D anchors every frame, above the canvas.
 
