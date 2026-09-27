@@ -50,6 +50,21 @@ Free tier ~8k tokens/min and ~200k tokens/day (~1k tokens per AI hour). Optimize
 4. Not built: ESP32 testbed + digital-twin sync, ESMI outage data, cell-level BMS/Kalman/BLAST-Lite, LLM-phrased explanations + checker, logins on control endpoints, 400/404 codes (FR-API4), multi-site, attack detection, stakeholder interviews.
 5. The no-WebGL blank-landing bug is fixed in v2 but **still present in the SIH repo/live site** — ask before fixing there.
 
+## Background (SIH version history and assets)
+- Team BOOMERS also built **KAVACH / SENTINEL** (border-surveillance AI + ESP32 alert layer) for SIH 2026 — ESP32 experience is useful for a v2 testbed.
+- Product name, tagline, SIH ID and team name: `frontend/src/brand.js`.
+- SIH version work (all in the SIH repo, carried into v2): landing + dashboard polish, FAQ, mobile menu, share image (`public/og-image.png`), legal/compliance pass (tariff wording, unsupported claims removed, Open-Meteo attribution, Privacy & Disclaimer page at `#/privacy`, credits at `#/credits`, `THIRD_PARTY_NOTICES.md`, fonts self-hosted, no Google requests), "Run 1 hour" / "Simulate N days" buttons.
+- 21st.dev components: wave background (Kain Xu, MIT); WebGL shader + liquid glass button (Ali Imam, licence "unknown" — credited; open question: ask the author or replace).
+- SIH sketch images: `Desktop\SURYA_SAARTHI_SIH_Sketch` (15 PNG/SVG); image generator scripts: `Desktop\SIH_image_generators`. Deck style: sketch images, simple wording, honest numbers only.
+- `backend/sample_results/` in the **SIH** repo (26 Sep) is invalid (replan bug) — never quote it.
+
+## Strategy analysis done on 27 Sep (summary)
+- Biggest judge objections found: "why an LLM instead of an optimizer?", "your baseline is a strawman", "no validated results", "net metering makes the grid a free battery / PM Surya Ghar homes mostly have no battery", "hourly isn't real control", cloud dependency, cyber security. v2 answers most of these (optimizer + honest benchmark + power-cut focus + signed plan).
+- Comparable products: Schneider EcoStruxure Microgrid Advisor (AI forecasting + MPC), Siemens SICAM Microgrid Controller, Hitachi Energy e-mesh, open-source EMHASS (LP) and OpenEMS (Modbus), Tesla Storm Watch (pre-charges before storms). Our niche: India-specific (power cuts, genset, ToD, Hindi), explainable, open, low-cost.
+- Paper angles: LLM vs MILP/MPC dispatch under Indian ToD (optimality gap, override rate); explanation faithfulness; outage-aware reserve using Prayas ESMI data. Venues: CCAI workshops, ACM e-Energy workshops, IEEE ISGT Asia/India.
+- Patents: Indian Patents Act s.3(k) excludes software per se; CRI Guidelines 2025 need a technical effect — possible angles (edge interlock verifying setpoints, outage-aware reserve control) need a prior-art search; don't claim patentability.
+- "Do not claim": accuracy from simulated data, "predicts failures", "detects cyberattacks" without "simulated attacks", "digital twin" before syncing to real hardware.
+
 ## Working style the user expects
 - Plain, non-technical wording; honest claims only; never quote numbers not produced by a run on current code; label simulated/illustrative/placeholder values.
 - Tariff wording: "solar hours at least 20% cheaper; peak 10–20% costlier, set by each state; we assume 20%".
