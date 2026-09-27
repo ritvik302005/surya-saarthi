@@ -16,7 +16,7 @@ Last updated: 28 Sep 2026. Keep this file current at the end of every working se
 Live site (still v1, deploys from `main` of the GitHub repo): frontend https://microgrid-agent.vercel.app, backend https://microgrid-agent.onrender.com.
 
 ## v2 commits (newest first)
-- (28 Sep) 3D scene simplified: fixed flat-looking view, only active flows, sky/ground follow the simulated hour (bright day, moon at night), time chip; screenshots via Playwright (`playwright-core` + installed Chrome, WebGL flags)
+- (28 Sep) 3D scene: perspective look kept (user choice), only active flows, no label overlaps, HTML sky follows the simulated hour (bright day, moon at night) and weather (grey sky + clouds), time/weather chip; screenshots via Playwright (`playwright-core` + installed Chrome, WebGL flags)
 - (28 Sep) fixes from the project check: DR limits reach the AI + alert, what-if 400 + fair adjusted cost, 400/404 codes, per-run weather version, log cap, `#/dashboard` route
 - `3a74778` 3D energy scene; landing no longer blank without WebGL
 - `9558ba0` benchmark on recorded weather, operator notes, what-if, DR, signed device plan, v2 dashboard

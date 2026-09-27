@@ -113,7 +113,7 @@ What is stored · What is sent where (Groq: simulated numbers in AI mode and the
 | Component | File | Notes |
 |---|---|---|
 | EnergyView | `EnergyView.jsx` | Chooses 3D or flat; screen-reader summary (`role="img"`); deferred-jobs strip |
-| EnergyScene3D | `EnergyScene3D.jsx` | three.js scene; props: hour, solarGenKw, solarKw, batteryKw, gridKw, exportKw, gensetKw, unservedKw, gridAvailable, loadKw, socPct |
+| EnergyScene3D | `EnergyScene3D.jsx` | three.js scene; props: hour, scenario, solarGenKw, solarKw, batteryKw, gridKw, exportKw, gensetKw, unservedKw, gridAvailable, loadKw, socPct |
 | EnergyFlow | `EnergyFlow.jsx` | Flat SVG fallback (genset replaces grid in a cut) |
 | webgl helpers | `webgl.jsx` | `hasWebGL()`, `FallbackBoundary` |
 | OperatorPanel | `OperatorPanel.jsx` | `lang` |
@@ -124,11 +124,13 @@ What is stored · What is sent where (Groq: simulated numbers in AI mode and the
 | UI primitives | `components/ui/*` | Base UI / shadcn-style; links via `render={<a/>}` |
 
 ### 6.1 3D energy scene
-- View: fixed, gently tilted, no perspective and no camera motion, so it reads like a clear diagram. No shadows or glow effects.
-- Layout: solar array (left), tower (back-centre, wires leaving the scene), battery cabinet (centre, charge bar), genset (front-left, its label below it), house (right). Nothing overlaps on desktop or phone.
-- Time of day (from the simulated hour): sky gradient night → dawn → bright day → dusk → night; the ground lightens by day; the sun crosses from left (morning) to right (evening) and its glow grows with solar output; a moon at night. Corner chip: "☀ 13:00 · day" / morning / evening / "☾ night".
+- View: perspective 3D with soft shadows and a floor grid; the camera drifts slowly (still under reduced motion); narrower screens step back and aim right so the house stays in view. The ground is turned to face the camera, so its far edge is a level horizon.
+- Layout: solar array (left), tower (back-centre, wires leaving the scene; its label beside the top), battery cabinet (centre, charge bar), genset (front-left, its label below it), house (right). Labels don't overlap on desktop or phone.
+- Sky (HTML layer behind the canvas, down to the horizon): colour follows the simulated hour, night → dawn → bright day → dusk → night; the ground and lights brighten by day; the sun crosses from left (morning) to right (evening) and glows more with more solar output; a moon at night.
+- Weather (the run's scenario): sunny = clear; normal = 2 light clouds; cloudy = greyer sky, 4 grey clouds, dimmer sun and light; monsoon = greyest, 6 clouds. Clouds drift slowly (still under reduced motion) and turn dark at night.
+- Corner chip: "☀ 13:00 · day · clear", with morning / evening / "☾ night" and the weather.
 - Flows: only lines that carry power are drawn (solar, battery, grid, genset to the house, plus solar→battery, solar→grid export, genset→battery); lighter dots move along them, more and faster with more kW.
-- States: power cut = dark tower, blinking red beacon, genset smoke and a green lamp; unserved load = flickering windows; house windows lit by the power it gets.
+- States: power cut = dark tower, blinking red beacon, genset shaking with smoke and a green lamp; unserved load = flickering windows; house windows lit by the power it gets.
 - Labels are HTML (crisp, themed), positioned from the 3D anchors every frame, above the canvas.
 
 ## 7. Interactions and motion

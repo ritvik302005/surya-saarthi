@@ -432,6 +432,7 @@ export default function Dashboard({ onBack }) {
                 </div>
                 <EnergyView
                   hour={(state.sim_hour ?? 12) % 24}
+                  scenario={state.scenario}
                   solarGenKw={state.solar_kw || 0}
                   socPct={state.battery_soc_pct ?? 50}
                   solarKw={decision.solar_used_kw || 0}

@@ -1,12 +1,12 @@
 import { useEffect, useRef } from 'react'
 import * as THREE from 'three'
 
-// The site seen from a fixed, gently tilted angle (no perspective, no camera motion):
-// solar array, battery cabinet (level = charge), transmission tower (dark in a power cut),
-// diesel genset (smokes when running) and the house (windows lit by the power it gets).
-// The sky follows the simulated hour: bright by day, with the sun crossing it and glowing
-// more with more solar output, dark with a moon at night. Dots flow along the lines,
-// faster and denser with more kW. Numbers are HTML labels pinned to each model.
+// A small 3D site: solar array, battery cabinet (level = charge), transmission tower (dark
+// in a power cut), diesel genset (shakes and smokes when running) and the house (windows lit
+// by the power it gets). Only lines that carry power are drawn; dots flow along them, faster
+// and denser with more kW. Behind the scene, an HTML sky follows the simulated hour (bright
+// by day with the sun crossing it, dark with a moon at night) and the weather (greyer, with
+// more clouds, from sunny to monsoon). Numbers are HTML labels pinned to each model.
 
 const COLOR = { solar: 0xffb648, battery: 0x4fd8c4, grid: 0xff6b5c, genset: 0xb99cff }
 const HIDDEN = new THREE.Vector3(0, -100, 0)
@@ -21,7 +21,7 @@ const POS = {
 }
 const ANCHOR = {
   solar: new THREE.Vector3(-5.9, 2.3, -1.4),
-  grid: new THREE.Vector3(-1.9, 3.75, -3.3),
+  grid: new THREE.Vector3(-0.35, 3.0, -3.3),   // beside the tower top, leaving the sky above it clear for the sun
   battery: new THREE.Vector3(-0.35, 2.0, 1.3),
   genset: new THREE.Vector3(-2.9, 0, 3.45),
   house: new THREE.Vector3(3.9, 2.8, 0.3),
@@ -293,29 +293,57 @@ const SKY = [
   [21, '#0b1026', '#1c2446', 0],
   [24, '#0b1026', '#1c2446', 0],
 ]
-const mixHex = (a, b, f) => '#' + new THREE.Color(a).lerp(new THREE.Color(b), f).getHexString()
-function skyAt(hour) {
+
+// Weather (the run's scenario): how grey the sky turns and how many clouds there are.
+const WEATHER = {
+  sunny: { overcast: 0, clouds: 0, label: 'clear' },
+  normal: { overcast: 0.12, clouds: 2, label: 'some clouds' },
+  cloudy: { overcast: 0.5, clouds: 4, label: 'cloudy' },
+  monsoon: { overcast: 0.75, clouds: 6, label: 'monsoon' },
+}
+// Cloud shapes and places in the sky band (percent of its width / height), used in this order.
+const CLOUDS = [
+  { x: 14, y: 30, w: 150 }, { x: 70, y: 22, w: 180 }, { x: 42, y: 52, w: 130 },
+  { x: 88, y: 55, w: 120 }, { x: 28, y: 12, w: 170 }, { x: 58, y: 70, w: 150 },
+]
+
+// Blend a colour towards grey of the same brightness, a little darker, by `amount` (0-1).
+function overcastColor(hex, amount) {
+  const c = new THREE.Color(hex)
+  const l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11
+  return c.lerp(new THREE.Color(l, l, l), amount).multiplyScalar(1 - 0.18 * amount)
+}
+
+function skyAt(hour, overcast = 0) {
   const h = ((hour % 24) + 24) % 24
   let i = 0
   while (SKY[i + 1][0] <= h) i++
   const [h0, top0, low0, d0] = SKY[i]
   const [h1, top1, low1, d1] = SKY[i + 1]
   const f = (h - h0) / (h1 - h0)
-  return { top: mixHex(top0, top1, f), low: mixHex(low0, low1, f), daylight: d0 + (d1 - d0) * f }
+  const mix = (a, b) => '#' + overcastColor(new THREE.Color(a).lerp(new THREE.Color(b), f).getHex(), overcast).getHexString()
+  return { top: mix(top0, top1), low: mix(low0, low1), daylight: d0 + (d1 - d0) * f }
 }
 
-const GROUND_NIGHT = new THREE.Color(0x151a22)
-const GROUND_DAY = new THREE.Color(0xd3dec4)
+const GROUND_NIGHT = new THREE.Color(0x2c313b)
+const GROUND_DAY = new THREE.Color(0xb7c4a6)
+const GRID_NIGHT = new THREE.Color(0x101318)
+const GRID_DAY = new THREE.Color(0x98a68a)
 const SUNRISE = 6, SUNSET = 18.5
+const GROUND_FAR_Z = -10   // the ground ends this far beyond the view's centre; above that line is sky
 
 const fmt = (kw) => `${Math.abs(kw).toFixed(1)} kW`
 const hh = (h) => `${String(Math.floor(h) % 24).padStart(2, '0')}:00`
 
-export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, batteryKw = 0, gridKw = 0, exportKw = 0, gensetKw = 0,
-                                        unservedKw = 0, gridAvailable = true, loadKw = 0, socPct = 50, loading }) {
+export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGenKw = 0, solarKw = 0, batteryKw = 0, gridKw = 0,
+                                        exportKw = 0, gensetKw = 0, unservedKw = 0, gridAvailable = true, loadKw = 0, socPct = 50, loading }) {
   const mountRef = useRef(null)
+  const skyRef = useRef(null)
+  const sunRef = useRef(null)
+  const moonRef = useRef(null)
   const labelRefs = useRef({})
   const target = useRef({})
+  const weather = WEATHER[scenario] || WEATHER.normal
 
   // Latest values for the animation loop (it reads these every frame).
   const charge = Math.max(0, -batteryKw)
@@ -324,10 +352,13 @@ export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, 
     solarGen: solarGenKw, solarLoad: solarKw, solarBattery: chargeFromSolar, solarGrid: exportKw,
     batteryLoad: Math.max(0, batteryKw), gridLoad: gridKw, gensetBattery: charge - chargeFromSolar,
     gensetLoad: Math.max(0, gensetKw - (charge - chargeFromSolar)), genset: gensetKw,
-    gridOk: gridAvailable, soc: socPct, served: loadKw > 0 ? Math.max(0, 1 - unservedKw / loadKw) : 1, hour,
+    gridOk: gridAvailable, soc: socPct, served: loadKw > 0 ? Math.max(0, 1 - unservedKw / loadKw) : 1,
+    hour, overcast: weather.overcast,
   }
   const daylight = skyAt(hour).daylight
   const timeOfDay = daylight >= 0.9 ? 'day' : daylight < 0.1 ? 'night' : hour < 12 ? 'morning' : 'evening'
+  const icon = timeOfDay === 'night' ? '☾' : weather.clouds >= 4 ? '☁' : '☀'
+  const cloudTone = daylight >= 0.5 ? (weather.overcast >= 0.5 ? 'grey' : 'white') : 'night'
 
   // Label text (plain HTML, updated with the data).
   useEffect(() => {
@@ -351,103 +382,102 @@ export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: 'low-power' })
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2))
-    renderer.setClearColor(0x000000, 0)   // the sky is the container's CSS background
+    renderer.setClearColor(0x000000, 0)   // the sky layer behind the canvas shows through
+    renderer.shadowMap.enabled = true
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    renderer.toneMapping = THREE.ACESFilmicToneMapping
     renderer.domElement.setAttribute('aria-hidden', 'true')
     mount.appendChild(renderer.domElement)
 
-    // A fixed, gently tilted view without perspective: the site reads like a clear
-    // diagram, and nothing sways or zooms.
     const scene = new THREE.Scene()
-    const camera = new THREE.OrthographicCamera(-10, 10, 5, -5, 0.1, 100)
-    const TILT = 0.5                                   // radians above the horizontal
-    const center = new THREE.Vector3(-0.7, 0, 0)
-    camera.position.copy(center).add(new THREE.Vector3(0, Math.sin(TILT), Math.cos(TILT)).multiplyScalar(30))
-    camera.lookAt(center)
+    const camera = new THREE.PerspectiveCamera(34, 16 / 9, 0.1, 100)
+    const lookAt = new THREE.Vector3(-0.9, 1.25, -0.2)
+    const camBase = new THREE.Vector3(0.6, 6.0, 12.4)
 
-    const hemi = new THREE.HemisphereLight(0xdfeaff, 0x3a3f35, 0.9)
+    const hemi = new THREE.HemisphereLight(0xcfe0ff, 0x16181b, 0.7)
     const sunLight = new THREE.DirectionalLight(0xfff0d6, 1.2)
-    sunLight.position.set(-3, 10, 6)
-    scene.add(hemi, sunLight)
+    sunLight.position.set(-2, 10, 4)
+    sunLight.castShadow = true
+    sunLight.shadow.mapSize.set(1024, 1024)
+    Object.assign(sunLight.shadow.camera, { left: -9, right: 9, top: 9, bottom: -9 })
+    const fill = new THREE.DirectionalLight(0x8fb4ff, 0.35)
+    fill.position.set(6, 4, 8)
+    scene.add(hemi, sunLight, fill)
 
-    // Ground ends at z = -9: above that line is sky (the container background).
-    const groundMat = new THREE.MeshBasicMaterial({ color: GROUND_DAY.clone() })   // flat colour, no shading
-    const ground = new THREE.Mesh(new THREE.PlaneGeometry(80, 40), groundMat)
+    // Ground from its far edge (the horizon line) to well behind the camera. It is turned to
+    // face the camera (see resize), so the horizon is level on screen.
+    const groundMat = new THREE.MeshStandardMaterial({ color: GROUND_NIGHT.clone(), roughness: 1 })
+    const ground = new THREE.Mesh(new THREE.PlaneGeometry(90, 40), groundMat)
     ground.rotation.x = -Math.PI / 2
-    ground.position.z = 11
-    scene.add(ground)
+    ground.position.z = GROUND_FAR_Z + 20
+    ground.receiveShadow = true
+    const groundGroup = new THREE.Group()
+    groundGroup.add(ground)
+    const grid = new THREE.GridHelper(20, 40)
+    grid.material.vertexColors = false
+    grid.material.color = GRID_NIGHT.clone()
+    grid.position.y = 0.005
+    scene.add(groundGroup, grid)
 
     const textures = [cellTexture(), glowSprite(), grilleTexture()]
     const [cells, sprite, grille] = textures
     const solar = buildSolar(cells)
     solar.group.position.copy(POS.solar)
     solar.group.scale.setScalar(1.2)
-    solar.group.rotation.y = 0.15
+    solar.group.rotation.y = 0.2
     const battery = buildBattery()
     battery.group.position.copy(POS.battery)
+    battery.group.rotation.y = 0.1
     const tower = buildTower()
     tower.group.position.copy(POS.tower)
-    tower.group.rotation.y = 0.15
+    tower.group.rotation.y = 0.2
     const genset = buildGenset(grille)
     genset.group.position.copy(POS.genset)
-    genset.group.rotation.y = 0.2
+    genset.group.rotation.y = 0.3
     const house = buildHouse()
     house.group.position.copy(POS.house)
-    house.group.rotation.y = -0.35
+    house.group.rotation.y = -0.45
     scene.add(solar.group, battery.group, tower.group, genset.group, house.group)
 
-    // Sun: crosses the sky from left (morning) to right (evening); its glow grows with solar output.
-    const sunHaloMat = new THREE.SpriteMaterial({ map: sprite, color: 0xffd27a, transparent: true, depthWrite: false })
-    const sunHalo = new THREE.Sprite(sunHaloMat)
-    const sunCore = new THREE.Mesh(new THREE.CircleGeometry(0.42, 32), new THREE.MeshBasicMaterial({ color: 0xffe08a }))
-    const moonMat = new THREE.MeshBasicMaterial({ color: 0xe8ecf5, transparent: true })
-    const moon = new THREE.Mesh(new THREE.CircleGeometry(0.32, 32), moonMat)
-    for (const m of [sunHalo, sunCore, moon]) m.renderOrder = -1
-    scene.add(sunHalo, sunCore, moon)
-    // Sky objects sit beyond the ground's far edge, facing the camera; skyPoint takes the
-    // height on screen (the ground's far edge is at 9 x sin(TILT)).
-    const skyPoint = (x, screenY) => new THREE.Vector3(x, (screenY - 11 * Math.sin(TILT)) / Math.cos(TILT), -11)
-    sunCore.quaternion.copy(camera.quaternion)
-    moon.quaternion.copy(camera.quaternion)
-
     const V = (x, y, z) => new THREE.Vector3(x, y, z)
-    const houseIn = V(3.2, 0.8, 0.6)
+    const houseIn = V(2.9, 0.8, 0.6)
     const flows = {
-      solarLoad: makeFlow(scene, [V(-4.6, 1.1, -0.6), V(-2.2, 2.3, -1.2), V(1.2, 2.0, -0.4), houseIn], COLOR.solar, sprite),
-      batteryLoad: makeFlow(scene, [V(0.3, 0.9, 1.4), V(1.4, 1.2, 1.3), V(2.4, 1.0, 1.0), houseIn], COLOR.battery, sprite),
-      gridLoad: makeFlow(scene, [V(-1.4, 2.35, -3.2), V(0.6, 2.4, -2.3), V(2.3, 1.6, -0.8), houseIn], COLOR.grid, sprite),
-      gensetLoad: makeFlow(scene, [V(-2.2, 0.7, 3.0), V(-0.4, 0.8, 3.0), V(1.8, 0.9, 2.2), houseIn], COLOR.genset, sprite),
+      solarLoad: makeFlow(scene, [V(-4.4, 1.2, -0.7), V(-2.2, 2.3, -1.2), V(1.0, 2.0, -0.4), houseIn], COLOR.solar, sprite),
+      batteryLoad: makeFlow(scene, [V(0.3, 0.9, 1.4), V(1.2, 1.2, 1.3), V(2.1, 1.0, 1.0), houseIn], COLOR.battery, sprite),
+      gridLoad: makeFlow(scene, [V(-1.4, 2.35, -3.2), V(0.4, 2.4, -2.3), V(2.0, 1.6, -0.8), houseIn], COLOR.grid, sprite),
+      gensetLoad: makeFlow(scene, [V(-2.2, 0.7, 3.0), V(-0.4, 0.8, 3.0), V(1.6, 0.9, 2.1), houseIn], COLOR.genset, sprite),
       solarBattery: makeFlow(scene, [V(-4.4, 0.8, 0.0), V(-2.6, 1.3, 0.9), V(-0.9, 1.0, 1.3)], COLOR.solar, sprite),
       solarGrid: makeFlow(scene, [V(-5.4, 1.6, -1.8), V(-4.0, 2.6, -2.9), V(-2.4, 2.3, -3.3)], COLOR.solar, sprite),
       gensetBattery: makeFlow(scene, [V(-2.3, 0.9, 2.6), V(-1.5, 1.2, 2.0), V(-0.8, 1.0, 1.5)], COLOR.genset, sprite),
     }
 
-    const smokeN = 10
+    const smokeN = 14
     const smokeGeom = new THREE.BufferGeometry()
     smokeGeom.setAttribute('position', new THREE.BufferAttribute(new Float32Array(smokeN * 3), 3))
-    const smokeMat = new THREE.PointsMaterial({ color: 0x8a8f96, size: 0.3, map: sprite, transparent: true, opacity: 0.3, depthWrite: false })
+    const smokeMat = new THREE.PointsMaterial({ color: 0x8a8f96, size: 0.35, map: sprite, transparent: true, opacity: 0.35, depthWrite: false })
     const smoke = new THREE.Points(smokeGeom, smokeMat)
     smoke.frustumCulled = false
     scene.add(smoke)
-    const exhaustWorld = genset.exhaust.clone().applyMatrix4(new THREE.Matrix4().makeRotationY(0.2)).add(POS.genset)
+    const exhaustWorld = genset.exhaust.clone().applyMatrix4(new THREE.Matrix4().makeRotationY(0.3)).add(POS.genset)
 
-    const cur = { solarGen: 0, soc: target.current.soc, gridOk: 1, genset: 0, served: 1, hour: target.current.hour }
+    const cur = { solarGen: 0, soc: target.current.soc, gridOk: 1, genset: 0, served: 1,
+                  hour: target.current.hour, overcast: target.current.overcast }
     const labelPos = new THREE.Vector3()
+    const horizonPoint = new THREE.Vector3()
     let width = 1, height = 1, running = true, frame = 0, last = performance.now(), time = 0, skyKey = ''
 
-    // Keep the whole site (x -8.2..6.2, screen height -3.4..6) in view at any aspect ratio;
-    // spare height goes to the sky.
     const resize = () => {
       width = mount.clientWidth
       height = mount.clientHeight
       renderer.setSize(width, height, false)
-      const aspect = width / height
-      const w = Math.max(15.2, 9.9 * aspect)
-      const h = w / aspect
-      camera.left = -w / 2 - 0.3
-      camera.right = w / 2 - 0.3
-      const bottom = aspect < 1.4 ? -3.9 : -3.3   // room for the genset label under the genset
-      camera.bottom = bottom
-      camera.top = bottom + h
+      camera.aspect = width / height
+      // Narrow screens: step back and aim a little right so the whole site (house included) fits.
+      const narrow = camera.aspect < 1.35
+      const back = narrow ? 1.5 : camera.aspect < 1.6 ? 1.15 : 1
+      camBase.set(narrow ? 1.6 : 0.6 * back, 6.0 * back, 12.4 * back)
+      lookAt.set(narrow ? -0.2 : -0.9, 1.25, -0.2)
+      groundGroup.position.set(lookAt.x, 0, lookAt.z)
+      groundGroup.rotation.y = Math.atan2(camBase.x - lookAt.x, camBase.z - lookAt.z)
       camera.updateProjectionMatrix()
     }
     const ro = new ResizeObserver(resize)
@@ -462,54 +492,46 @@ export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, 
       cur.gridOk += ((t.gridOk ? 1 : 0) - cur.gridOk) * k
       cur.genset += (t.genset - cur.genset) * k
       cur.served += (t.served - cur.served) * k
+      cur.overcast += (t.overcast - cur.overcast) * k
       // Hour eases forward (23 -> 0 wraps instead of running backwards).
       let dh = t.hour - cur.hour
       if (dh < -12) dh += 24
       if (dh > 12) dh -= 24
       cur.hour = (cur.hour + dh * Math.min(1, dt * 2) + 24) % 24
 
-      const sky = skyAt(cur.hour)
+      // Sky: colour by hour, greyer with clouds; daylight also dims under heavy cloud.
+      const sky = skyAt(cur.hour, cur.overcast)
       const key = sky.top + sky.low
       if (key !== skyKey) {
         skyKey = key
-        mount.style.background = `linear-gradient(to bottom, ${sky.top} 0%, ${sky.low} 58%)`
+        mount.style.background = `linear-gradient(to bottom, ${sky.top} 0%, ${sky.low} 45%)`
       }
-      const day = sky.daylight
+      const day = sky.daylight * (1 - 0.3 * cur.overcast)
       groundMat.color.copy(GROUND_NIGHT).lerp(GROUND_DAY, day)
-      hemi.intensity = 0.35 + day * 0.75
-      sunLight.intensity = 0.15 + day * 1.2
-
-      // Sun arc (morning left, evening right); brighter glow with more solar output.
+      grid.material.color.copy(GRID_NIGHT).lerp(GRID_DAY, day)
       const sunFrac = Math.min(1, cur.solarGen / 7)
-      const arc = (cur.hour - SUNRISE) / (SUNSET - SUNRISE)
-      const up = arc > 0 && arc < 1
-      const sunPos = skyPoint(-9 + arc * 17, 4.7 + Math.sin(Math.PI * Math.min(1, Math.max(0, arc))) * 1.3)
-      sunCore.position.copy(sunPos)
-      sunHalo.position.copy(sunPos)
-      sunCore.visible = sunHalo.visible = up
-      sunHalo.scale.setScalar(1.4 + sunFrac * 2.2)
-      sunHaloMat.opacity = 0.3 + sunFrac * 0.6
-      moon.visible = !up
-      moon.position.copy(skyPoint(5.5, 5.8))
-      moonMat.opacity = 1 - day
+      hemi.intensity = 0.55 + day * 0.65
+      hemi.color.setHex(day > 0.3 ? 0xcfe0ff : 0x7d8cb8)
+      sunLight.intensity = 0.3 + day * 0.7 + sunFrac * 0.8
 
-      solar.panelMats.forEach((m) => { m.emissiveIntensity = 0.05 + sunFrac * 0.35 })
+      solar.panelMats.forEach((m) => { m.emissiveIntensity = 0.3 + sunFrac * 0.6 })
 
       const lvl = Math.max(0.02, cur.soc / 100)
       battery.level.scale.y = lvl
       battery.level.position.y = 0.8 - 0.55 + (1.1 * lvl) / 2
-      battery.levelMat.emissiveIntensity = t.solarBattery + t.gensetBattery > 0.05 && !reduced ? 0.8 + 0.3 * Math.sin(time * 5) : 0.7
+      battery.levelMat.emissiveIntensity = 0.5 + (t.solarBattery + t.gensetBattery > 0.05 ? 0.6 + 0.3 * Math.sin(time * 5) : 0.2)
 
-      tower.steel.color.setScalar(0.25 + cur.gridOk * 0.4)
-      tower.wireMat.opacity = 0.15 + cur.gridOk * 0.6
+      tower.steel.color.setScalar(0.2 + cur.gridOk * 0.46)
+      tower.wireMat.opacity = 0.15 + cur.gridOk * 0.55
       tower.beacon.visible = !t.gridOk && (reduced || Math.sin(time * 6) > 0)
 
       const on = cur.genset > 0.05
-      genset.lampMat.color.setHex(on ? 0x3ddc6a : 0x333333)
+      genset.lampMat.color.setHex(on ? 0x6bff8a : 0x333333)
+      genset.body.position.set(on && !reduced ? Math.sin(time * 60) * 0.008 : 0, on && !reduced ? Math.cos(time * 53) * 0.006 : 0, 0)
       const sArr = smokeGeom.attributes.position.array
       for (let i = 0; i < smokeN; i++) {
-        const age = (time * 0.5 + i / smokeN) % 1
-        const p = on ? exhaustWorld.clone().add(new THREE.Vector3(Math.sin(i * 1.7) * 0.08 * age, age * 1.2, 0)) : HIDDEN
+        const age = (time * 0.6 + i / smokeN) % 1
+        const p = on ? exhaustWorld.clone().add(new THREE.Vector3(Math.sin(i * 1.7 + time) * 0.1 * age, age * 1.6, age * 0.35)) : HIDDEN
         sArr[i * 3] = p.x
         sArr[i * 3 + 1] = p.y
         sArr[i * 3 + 2] = p.z
@@ -520,12 +542,36 @@ export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, 
       // Windows: lit by the power the house gets (clearest at night); flicker if load goes unserved.
       house.windowMats.forEach((m, i) => {
         const flicker = cur.served < 0.99 && !reduced ? (Math.sin(time * 9 + i * 2) > 0.2 ? 1 : 0.35) : 1
-        m.emissiveIntensity = (0.1 + (1.6 - day * 0.9) * cur.served) * flicker
+        m.emissiveIntensity = (0.15 + (1.5 - day * 0.8) * cur.served) * flicker
       })
 
       for (const [key, flow] of Object.entries(flows)) updateFlow(flow, t[key] || 0, reduced ? 0 : dt)
 
+      if (!reduced) {
+        camera.position.set(camBase.x + Math.sin(time * 0.12) * 0.7, camBase.y + Math.sin(time * 0.09) * 0.15, camBase.z)
+      } else {
+        camera.position.copy(camBase)
+      }
+      camera.lookAt(lookAt)
+      camera.updateMatrixWorld()
       renderer.render(scene, camera)
+
+      // The sky layer ends at the horizon (the ground's far edge on screen); the sun crosses it
+      // left (morning) to right (evening), glowing more with more solar output; a moon at night.
+      horizonPoint.set(0, 0, GROUND_FAR_Z)
+      groundGroup.localToWorld(horizonPoint).project(camera)
+      const horizonPx = Math.max(0, (-horizonPoint.y * 0.5 + 0.5) * height)
+      if (skyRef.current) skyRef.current.style.height = `${horizonPx}px`
+      const arc = (cur.hour - SUNRISE) / (SUNSET - SUNRISE)
+      if (sunRef.current) {
+        const up = arc > 0 && arc < 1
+        const s = sunRef.current.style
+        s.opacity = up ? String(Math.min(1, 0.45 + sunFrac) * (1 - 0.45 * cur.overcast)) : '0'
+        s.left = `${6 + Math.min(1, Math.max(0, arc)) * 86}%`
+        s.top = `${88 - Math.sin(Math.PI * Math.min(1, Math.max(0, arc))) * 70}%`
+        s.setProperty('--glow', `${8 + sunFrac * 34}px`)
+      }
+      if (moonRef.current) moonRef.current.style.opacity = String(Math.max(0, 1 - sky.daylight * 2) * (1 - 0.6 * cur.overcast))
 
       for (const [key, anchor] of Object.entries(ANCHOR)) {
         const el = labelRefs.current[key]
@@ -583,7 +629,16 @@ export default function EnergyScene3D({ hour = 12, solarGenKw = 0, solarKw = 0, 
 
   return (
     <div className={`energy-scene ${loading ? 'computing' : ''}`} ref={mountRef}>
-      <div className="scene-time" aria-hidden="true">{timeOfDay === 'night' ? '☾' : '☀'} {hh(hour)} · {timeOfDay}</div>
+      {/* Sky layer (behind the canvas): sun, moon and the weather's clouds, down to the horizon. */}
+      <div className="scene-sky" ref={skyRef} aria-hidden="true">
+        <div className="scene-sun" ref={sunRef} />
+        <div className="scene-moon" ref={moonRef} />
+        {CLOUDS.slice(0, weather.clouds).map((c, i) => (
+          <div key={i} className={`scene-cloud ${cloudTone}`}
+               style={{ left: `${c.x}%`, top: `${c.y}%`, width: `${c.w / 10.4}%`, animationDelay: `${-i * 7}s` }} />
+        ))}
+      </div>
+      <div className="scene-time" aria-hidden="true">{icon} {hh(hour)} · {timeOfDay} · {weather.label}</div>
       {label('solar', 'Solar', 'var(--solar)')}
       {label('battery', 'Battery', 'var(--battery)')}
       {label('grid', 'Grid', 'var(--grid)')}

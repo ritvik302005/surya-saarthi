@@ -69,6 +69,22 @@
 .scene-label-name { font-family: var(--font-mono); font-size: 0.6rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--c); }
 .scene-label-value { font-family: var(--font-display); font-size: 1.05rem; font-weight: 600; line-height: 1.1; color: var(--c); }
 .scene-label-sub { font-family: var(--font-mono); font-size: 0.6rem; color: var(--muted-foreground); }
+.scene-sky { position: absolute; left: 0; top: 0; right: 0; height: 35%; overflow: hidden; pointer-events: none; z-index: 0; }
+.scene-sun { position: absolute; width: 38px; height: 38px; border-radius: 50%; transform: translate(-50%, -50%);
+  background: radial-gradient(circle, #fff5cf 0%, #ffd86e 60%, #ffc24a 100%);
+  box-shadow: 0 0 var(--glow, 12px) calc(var(--glow, 12px) / 2) rgba(255, 214, 107, 0.55); transition: opacity 0.6s; }
+.scene-moon { position: absolute; right: 12%; top: 32%; width: 28px; height: 28px; border-radius: 50%; opacity: 0;
+  background: #e8ecf5; box-shadow: 0 0 14px 4px rgba(232, 236, 245, 0.22); transition: opacity 0.6s; }
+.scene-cloud { position: absolute; aspect-ratio: 4.4; border-radius: 999px; transform: translate(-50%, -50%);
+  background: var(--cloud); animation: cloud-drift 38s ease-in-out infinite alternate; transition: background 0.8s; }
+.scene-cloud::before, .scene-cloud::after { content: ''; position: absolute; background: inherit; border-radius: 50%; }
+.scene-cloud::before { width: 42%; height: 160%; left: 16%; bottom: 25%; }
+.scene-cloud::after { width: 32%; height: 125%; left: 50%; bottom: 30%; }
+.scene-cloud.white { --cloud: rgba(255, 255, 255, 0.92); }
+.scene-cloud.grey { --cloud: rgba(158, 166, 176, 0.95); }
+.scene-cloud.night { --cloud: rgba(58, 64, 84, 0.9); }
+@keyframes cloud-drift { from { margin-left: -3%; } to { margin-left: 3%; } }
+@media (prefers-reduced-motion: reduce) { .scene-cloud { animation: none; } }
 .scene-time { position: absolute; top: 12px; left: 14px; z-index: 2; font-family: var(--font-mono); font-size: 0.72rem;
   color: #f2f0ec; background: rgba(14, 15, 16, 0.6); padding: 4px 10px; border-radius: 100px; pointer-events: none; }
 @media (max-width: 640px) {
