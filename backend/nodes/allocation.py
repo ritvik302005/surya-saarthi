@@ -34,6 +34,11 @@ Rules:
 - Grid price changes by time of day. Save battery charge for expensive peak hours, and
   when a flexible load must use grid power, run it in a cheaper hour before its deadline
   instead of piling every deferred load into the last hour.
+- Power cuts: when the grid is down, only essential load runs, from solar, battery and a
+  diesel genset (expensive: about Rs {config.GENSET_RS_PER_KWH:.0f}/kWh). Before a scheduled power cut, keep
+  enough battery charge to carry the essential load through it.
+- Taking energy out of the battery wears it (about Rs {config.BATTERY_WEAR_RS_PER_KWH:.2f} per kWh), and about
+  {100 - config.BATTERY_ROUND_TRIP_EFFICIENCY * 100:.0f}% of stored energy is lost to efficiency.
 
 Return one JSON object with exactly these fields:
 {{"solar_used_kw": <number>, "battery_used_kw": <number, negative means charging>, "grid_used_kw": <number>, "defer_loads": [<load names>], "reasoning": "<one sentence>"}}
@@ -107,25 +112,10 @@ def _invoke_with_retry(messages):
 
 
 def _fallback_decision(state, why):
-    """The fixed rule, used whenever the LLM isn't: solar first, then battery down to
-    the reserve (within the rate limit), then grid; every job runs now, none deferred.
-    It is the same logic as the rule-based baseline, so a fallback hour is never worse
-    than the comparison controller. Surplus solar charging and export are filled in
-    by the safety layer, as for any decision."""
-    solar = max(0.0, float(state["solar_kw"]))
-    demand = float(state["critical_load_kw"]) + sum(float(load["power_kw"]) for load in state["flexible_loads"])
-    solar_used = min(solar, demand)
-    remaining = demand - solar_used
-    available_kwh = max(0.0, (state["battery_soc_pct"] - config.BATTERY_RESERVE_PCT) / 100 * state["battery_capacity_kwh"])
-    battery = min(remaining, available_kwh / config.CYCLE_HOURS, config.BATTERY_MAX_DISCHARGE_KW)
-    return {
-        "solar_used_kw": round(solar_used, 2),
-        "battery_used_kw": round(battery, 2),
-        "grid_used_kw": round(remaining - battery, 2),
-        "defer_loads": [],
-        "reasoning": (f"The fixed rule decided this hour ({why}): solar first, then battery above the "
-                      f"{config.BATTERY_RESERVE_PCT:.0f}% reserve, then grid."),
-    }
+    """The fixed rule, used whenever the LLM isn't. It is the same logic as the
+    rule-based baseline, so a fallback hour is never worse than the comparison controller."""
+    from nodes.decide import fixed_rule_decision
+    return fixed_rule_decision(state, why)
 
 
 def _extract_json(content):
@@ -181,10 +171,15 @@ def plan_allocation_node(state):
     upcoming_prices = ", ".join(
         f"{(hour_now + k) % 24:02d}h Rs {config.grid_price_for_hour((hour_now + k) % 24)}" for k in range(1, 9)
     )
-    solar_forecast = state.get("solar_forecast_next_hours") or [state["forecast_solar_kw"]]
+    solar_forecast = (state.get("solar_forecast_next_hours") or [state["forecast_solar_kw"]])[:config.SOLAR_FORECAST_HOURS]
     solar_forecast_text = ", ".join(
         f"{(hour_now + k + 1) % 24:02d}h {kw} kW" for k, kw in enumerate(solar_forecast)
     )
+    sim_hour = state.get("sim_hour", 0)
+    cuts = [f"{s % 24:02d}:00-{e % 24:02d}:00" for s, e in state.get("outages", []) if e > sim_hour and s < sim_hour + 24]
+    targets = [f"at least {t['min_pct']:.0f}% by {t['hour'] % 24:02d}:00" for t in state.get("soc_targets", [])
+               if sim_hour <= t["hour"] < sim_hour + 24]
+    bms = state.get("bms") or {}
     human_prompt = f"""
 Weather scenario: {state.get('scenario', 'normal')}
 Simulated hour: {state.get('sim_hour', 0)} (hour-of-day {state.get('sim_hour', 0) % 24})
@@ -195,6 +190,10 @@ Critical load: {state['critical_load_kw']} kW
 Flexible loads: {flexible_summary}
 Grid price now: Rs {state['grid_price_per_kwh']}/kWh
 Grid price next 8 hours: {upcoming_prices}
+Grid now: {"available" if state.get("grid_available", True) else "POWER CUT (grid unavailable)"}
+Scheduled power cuts (next 24 h): {", ".join(cuts) or "none"}
+Battery limits now (BMS): charge up to {bms.get("max_charge_kw", config.BATTERY_MAX_CHARGE_KW)} kW, discharge up to {bms.get("max_discharge_kw", config.BATTERY_MAX_DISCHARGE_KW)} kW
+Operator battery targets: {", ".join(targets) or "none"}
 """
     if state.get("replanned"):
         human_prompt += (

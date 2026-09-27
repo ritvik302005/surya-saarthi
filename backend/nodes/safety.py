@@ -1,93 +1,139 @@
-from config import CYCLE_HOURS, BATTERY_RESERVE_PCT, BATTERY_MAX_CHARGE_KW, BATTERY_MAX_DISCHARGE_KW, GRID_EXPORT_LIMIT_KW
+"""Hard safety rules and plant physics, applied to EVERY controller's proposal
+(the AI, the optimizer and the fixed rule), so all are judged on the same terms.
+
+Order: jobs -> solar serves load -> battery (within BMS and reserve limits) -> genset
+-> grid (or, in a power cut: more battery -> genset -> unserved) -> surplus charges
+the battery -> leftover solar is exported (or curtailed in a power cut).
+"""
+import physics
+from bms import bms_limits
+from config import (GENSET_KW, GENSET_MIN_LOAD_FRACTION, GRID_EXPORT_LIMIT_KW)
 
 TOLERANCE_KW = 0.01  # ignore rounding-level differences so overrides only fire on real violations
 
+
+def _genset_output(requested_kw):
+    """A running genset delivers at least its minimum load and at most its rating."""
+    if requested_kw <= TOLERANCE_KW:
+        return 0.0
+    return min(GENSET_KW, max(requested_kw, GENSET_KW * GENSET_MIN_LOAD_FRACTION))
+
+
 def enforce_safety_node(state):
-    decision = dict(state["decision"])  # copy so we don't mutate the LLM's original response
+    proposal = dict(state["decision"])  # keep the controller's original proposal untouched
+    decision = dict(proposal)
     alerts = list(state.get("alerts", []))
 
-    solar_used = max(0, decision.get("solar_used_kw", 0))
-    battery_used = decision.get("battery_used_kw", 0)
-    grid_used = max(0, decision.get("grid_used_kw", 0))
-    solar_available = max(0, state.get("solar_kw", 0))
+    soc = state["battery_soc_pct"]
+    capacity = state["battery_capacity_kwh"]
+    bms = state.get("bms") or bms_limits(soc, state.get("battery_soh", 1.0))
+    grid_ok = state.get("grid_available", True)
+    solar_available = max(0.0, state.get("solar_kw", 0))
+    loads = state.get("flexible_loads", [])
 
-    # --- Check 0: jobs at their deadline can't be deferred again ---
-    must_run = {load["name"] for load in state.get("flexible_loads", []) if load.get("must_run")}
-    defer_loads = list(decision.get("defer_loads", []))
+    # --- Check 0: jobs. At their deadline they can't be deferred; in a power cut the
+    # other flexible jobs wait, so only essentials run on battery/genset. ---
+    must_run = {load["name"] for load in loads if load.get("must_run")}
+    known = {load["name"] for load in loads}
+    defer_loads = [name for name in proposal.get("defer_loads", []) if name in known]
     forced = [name for name in defer_loads if name in must_run]
     if forced:
         defer_loads = [name for name in defer_loads if name not in must_run]
         alerts.append(f"Safety override: {', '.join(forced)} reached its deadline and cannot be deferred again.")
+    if not grid_ok:
+        waiting = [load["name"] for load in loads if load["name"] not in must_run and load["name"] not in defer_loads]
+        if waiting:
+            defer_loads += waiting
+            alerts.append(f"Power cut: {', '.join(waiting)} will wait; essentials only on battery and genset.")
 
-    # --- Check 1: can't use more solar than is actually being generated ---
-    if solar_used > solar_available + TOLERANCE_KW:
-        shortfall = round(solar_used - solar_available, 2)
-        solar_used = solar_available
-        grid_used += shortfall
-        alerts.append(f"Safety override: allocator used {shortfall} kW more solar than was generated ({solar_available} kW), shifted to grid.")
+    demand = state["critical_load_kw"] + sum(load["power_kw"] for load in loads if load["name"] not in defer_loads)
 
-    if battery_used >= 0:
-        # --- Check 2: discharge — reserve floor AND an absolute rate ceiling ---
-        available_kwh = max(0, (state["battery_soc_pct"] - BATTERY_RESERVE_PCT) / 100 * state["battery_capacity_kwh"])
-        max_battery_kw = min(available_kwh / CYCLE_HOURS, BATTERY_MAX_DISCHARGE_KW)
+    # --- Check 1: can't use more solar than is generated; solar always serves load first ---
+    proposed_solar = max(0.0, proposal.get("solar_used_kw", 0))
+    if proposed_solar > solar_available + TOLERANCE_KW:
+        alerts.append(f"Safety override: allocator used {round(proposed_solar - solar_available, 2)} kW more solar "
+                      f"than was generated ({solar_available} kW), shifted to other sources.")
+    solar_to_load = min(solar_available, demand)
+    remaining = demand - solar_to_load
 
-        if battery_used > max_battery_kw + TOLERANCE_KW:
-            shortfall = round(battery_used - max_battery_kw, 2)
-            battery_used = round(max_battery_kw, 2)
-            grid_used += shortfall
-            alerts.append(f"Safety override: capped battery discharge to protect {BATTERY_RESERVE_PCT}% reserve / {BATTERY_MAX_DISCHARGE_KW} kW rate limit, shifted {shortfall} kW to grid.")
+    # --- Check 2: battery within the reserve and the BMS's live limits ---
+    max_dis = min(physics.max_discharge_kw(soc, capacity), bms["max_discharge_kw"])
+    max_chg = min(physics.max_charge_kw(soc, capacity), bms["max_charge_kw"])
+    battery = proposal.get("battery_used_kw", 0)
+    if battery > max_dis + TOLERANCE_KW:
+        alerts.append(f"Safety override: capped battery discharge at {max_dis:.2f} kW (reserve, rate limit or BMS), "
+                      f"shifted {round(battery - max_dis, 2)} kW to other sources.")
+        battery = max_dis
+    battery_out = min(max(0.0, battery), remaining)   # never discharge more than the load needs
+    remaining -= battery_out
+
+    # --- Check 3: genset (if the controller asked for it) serves load next ---
+    genset = _genset_output(max(0.0, proposal.get("genset_kw", 0)))
+    genset_to_load = min(genset, remaining)
+    remaining -= genset_to_load
+
+    # --- Check 4: the rest comes from the grid, or in a power cut from battery -> genset -> unserved ---
+    grid_used, unserved = 0.0, 0.0
+    if grid_ok:
+        grid_used = remaining
+        if remaining > max(0.0, proposal.get("grid_used_kw", 0)) + TOLERANCE_KW:
+            alerts.append(f"Safety override: {round(remaining - max(0.0, proposal.get('grid_used_kw', 0)), 2)} kW "
+                          f"of demand was left unpowered by the allocator, forced from grid.")
+        remaining = 0.0
     else:
-        # --- Check 2B: charging — only from surplus solar, can't pass 100% SOC or the charge-rate limit ---
-        charge_kw = -battery_used
-        room_kwh = max(0, (100.0 - state["battery_soc_pct"]) / 100 * state["battery_capacity_kwh"])
-        surplus_solar = max(0, solar_available - solar_used)
-        max_charge_kw = min(room_kwh / CYCLE_HOURS, BATTERY_MAX_CHARGE_KW, surplus_solar)
+        if remaining > TOLERANCE_KW:
+            extra = min(remaining, max(0.0, max_dis - battery_out))
+            battery_out += extra
+            remaining -= extra
+        if remaining > TOLERANCE_KW:
+            before = genset
+            genset = _genset_output(genset_to_load + remaining) if genset < GENSET_KW else genset
+            added = min(genset - genset_to_load, remaining)
+            genset_to_load += added
+            remaining -= added
+            if genset > before:
+                alerts.append(f"Power cut: genset running at {genset:.1f} kW for essential load.")
+        if remaining > TOLERANCE_KW:
+            unserved = remaining
+            alerts.append(f"Power cut: {unserved:.2f} kW of essential load could not be served.")
+        remaining = 0.0
+    # A running genset's spare output (it can't go below its minimum load) serves the load
+    # before the battery does, so the battery isn't drained while diesel is wasted.
+    spare = genset - genset_to_load
+    if spare > TOLERANCE_KW and battery_out > 0:
+        shift = min(spare, battery_out)
+        battery_out -= shift
+        genset_to_load += shift
 
-        if charge_kw > max_charge_kw + TOLERANCE_KW:
-            capped = round(charge_kw - max_charge_kw, 2)
-            battery_used = round(-max_charge_kw, 2)
-            alerts.append(f"Safety override: capped battery charging at {max_charge_kw:.2f} kW (surplus solar, 100% SOC or {BATTERY_MAX_CHARGE_KW} kW rate limit), {capped} kW not charged.")
+    # --- Check 5: surplus (solar, then any extra genset output) charges the battery; never the grid ---
+    surplus_solar = solar_available - solar_to_load
+    genset_excess = genset - genset_to_load
+    charge = 0.0
+    if battery_out <= TOLERANCE_KW:
+        battery_out = 0.0
+        wanted = max(0.0, -battery) if battery < 0 else 0.0
+        charge = min(max_chg, surplus_solar + genset_excess)
+        if wanted > charge + TOLERANCE_KW:
+            alerts.append(f"Safety override: capped battery charging at {charge:.2f} kW (surplus power, 100% SOC, "
+                          f"rate limit or BMS), {round(wanted - charge, 2)} kW not charged.")
+    solar_to_battery = min(charge, surplus_solar)
+    genset_wasted = genset_excess - (charge - solar_to_battery)
 
-    # --- Check 3: every load that isn't deferred must actually be powered ---
-    # (charging doesn't serve load, so a negative battery_used contributes 0)
-    demand_kw = state["critical_load_kw"] + sum(
-        load["power_kw"] for load in state.get("flexible_loads", []) if load["name"] not in defer_loads
-    )
-    supplied = solar_used + max(0, battery_used) + grid_used
-    if supplied < demand_kw - TOLERANCE_KW:
-        shortfall = round(demand_kw - supplied, 2)
-        grid_used = round(grid_used + shortfall, 2)
-        alerts.append(f"Safety override: {shortfall} kW of demand was left unpowered by the allocator, forced from grid.")
-    elif supplied > demand_kw and grid_used > 0:
-        # don't buy grid power nothing is using
-        grid_used = max(0, grid_used - (supplied - demand_kw))
+    # --- Check 6: leftover solar is exported (net metering), or curtailed in a power cut ---
+    solar_left = surplus_solar - solar_to_battery
+    export = min(solar_left, GRID_EXPORT_LIMIT_KW) if grid_ok else 0.0
 
-    # --- Check 4: surplus solar is never wasted while the battery has room ---
-    # solar_used_kw means solar serving load; solar going into the battery is
-    # represented only by a negative battery_used_kw (same as the prompt says).
-    if battery_used <= 0:
-        solar_for_load = min(solar_used, max(0, demand_kw - grid_used))
-        charge_kw = -battery_used
-        leftover = max(0, solar_available - solar_for_load - charge_kw)
-        room_kw = max(0, (100.0 - state["battery_soc_pct"]) / 100 * state["battery_capacity_kwh"]) / CYCLE_HOURS
-        extra = min(leftover, max(0, room_kw - charge_kw), max(0, BATTERY_MAX_CHARGE_KW - charge_kw))
-        battery_used = -(charge_kw + extra) if charge_kw + extra > 0 else 0.0   # avoid -0.0
-        solar_used = solar_for_load
-
-    # --- Check 5: whatever solar is left after load and battery is exported (net metering) ---
-    solar_to_battery = max(0, -battery_used)
-    surplus = max(0, solar_available - solar_used - solar_to_battery)
-    export_kw = min(surplus, GRID_EXPORT_LIMIT_KW)
-
-    decision["solar_used_kw"] = round(solar_used, 2)
-    decision["grid_export_kw"] = round(export_kw, 2)
-    decision["solar_curtailed_kw"] = round(surplus - export_kw, 2)
-    decision["battery_used_kw"] = round(battery_used, 2)
-    decision["grid_used_kw"] = round(grid_used, 2)
-    decision["defer_loads"] = defer_loads
-
-    return {
-        **state,
-        "decision": decision,
-        "alerts": alerts
-    }
+    battery_used = battery_out if battery_out > 0 else -charge
+    decision.update({
+        "solar_used_kw": round(solar_to_load, 2),
+        "battery_used_kw": round(battery_used, 2) if abs(battery_used) >= 0.005 else 0.0,   # avoid -0.0
+        "grid_used_kw": round(grid_used, 2),
+        "genset_kw": round(genset, 2),
+        "genset_wasted_kw": round(max(0.0, genset_wasted), 2),
+        "grid_export_kw": round(export, 2),
+        "solar_curtailed_kw": round(solar_left - export, 2),
+        "unserved_kw": round(unserved, 2),
+        "defer_loads": defer_loads,
+    })
+    alerts += [f"BMS: {a}" for a in bms.get("alarms", []) if f"BMS: {a}" not in alerts]
+    return {**state, "decision": decision, "alerts": alerts}

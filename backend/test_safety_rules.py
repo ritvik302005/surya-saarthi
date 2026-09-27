@@ -33,10 +33,11 @@ assert out["decision"]["solar_used_kw"] == 0.0, out["decision"]
 assert out["decision"]["grid_used_kw"] == 3.0, out["decision"]
 assert any("more solar than was generated" in a for a in out["alerts"])
 
-# 2. Battery never goes below the reserve (60% of 10 kWh -> 4 kWh usable, 5 kW rate cap)
+# 2. Battery never goes below the reserve: at 22% of 10 kWh, 0.2 kWh is above the 20%
+#    reserve, and discharge losses (efficiency) leave 0.19 kW for the load
 out = enforce_safety_node(base_state(battery_soc_pct=22.0, decision=decide(battery=3.0)))
-assert out["decision"]["battery_used_kw"] == 0.2, out["decision"]
-assert out["decision"]["grid_used_kw"] == 2.8, out["decision"]
+assert out["decision"]["battery_used_kw"] == 0.19, out["decision"]
+assert out["decision"]["grid_used_kw"] == 2.81, out["decision"]
 
 # 3. A non-deferred flexible load left unpowered is topped up from grid
 pump = {"name": "water_pump (07:00)", "power_kw": 1.5, "deadline_hour": 10, "deferred": False}
@@ -106,16 +107,61 @@ assert (again["solar_kw"], again["critical_load_kw"]) == (fresh["solar_kw"], fre
 other = read_and_forecast_node({"sim_hour": 12, "seed": 8})
 assert (other["solar_kw"], other["critical_load_kw"]) != (fresh["solar_kw"], fresh["critical_load_kw"])
 
-# 10. Rule-based baseline: solar, then battery to reserve, then grid; surplus charges
-from baseline import rule_based_step
-night = rule_based_step(22.0, 10.0, 0.0, 3.0, [pump], 8.0)
-assert night["battery_kw"] == 0.2 and night["grid_kw"] == 4.3, night
-assert night["cost_rs"] == round(4.3 * 8.0, 2), night
-sunny = rule_based_step(50.0, 10.0, 6.0, 3.0, [], 6.4)
-assert sunny["grid_kw"] == 0 and sunny["battery_kw"] == -3.0 and sunny["soc_pct"] == 80.0, sunny
+# 10. Fixed rule (the baseline) through the same safety + apply: solar, then battery to
+#     the reserve, then grid; surplus charges, with charge/discharge losses
+from nodes.decide import fixed_rule_decision
+from nodes.apply import apply_decision_node
 
-full = rule_based_step(100.0, 10.0, 6.0, 3.0, [], 6.4)
-assert full["export_kw"] == 3.0 and full["net_cost_rs"] == -9.0, full
+
+def fixed(**overrides):
+    state = base_state(**overrides)
+    out = enforce_safety_node({**state, "decision": fixed_rule_decision(state)})
+    return out, apply_decision_node(out)
+
+
+night, after = fixed(battery_soc_pct=22.0, flexible_loads=[pump])
+assert night["decision"]["battery_used_kw"] == 0.19 and night["decision"]["grid_used_kw"] == 4.31, night["decision"]
+assert night["alerts"] == [] and after["battery_soc_pct"] == 20.02, (night["alerts"], after["battery_soc_pct"])
+sunny, after = fixed(battery_soc_pct=50.0, solar_kw=6.0)
+assert sunny["decision"]["battery_used_kw"] == -3.0 and sunny["decision"]["grid_used_kw"] == 0.0, sunny["decision"]
+assert after["battery_soc_pct"] == 78.77, after["battery_soc_pct"]   # 3 kWh in, 95.9% of it stored
+full, _ = fixed(battery_soc_pct=100.0, solar_kw=6.0)
+assert full["decision"]["grid_export_kw"] == 3.0, full["decision"]
+assert generate_report_node({**full, "flexible_loads": []})["report"]["net_cost_rs"] == -9.0
+
+# 10b. Physics: solar losses, heat and inverter clipping; battery efficiency and wear
+import physics
+assert physics.pv_ac_kw(1000, 25) == 7.22, physics.pv_ac_kw(1000, 25)     # 14% losses, hot cells, inverter
+assert physics.pv_ac_kw(1300, -10) == 10.0                                 # never above the 10 kW inverter
+assert physics.pv_ac_kw(0, 30) == 0.0
+assert round(physics.soc_after(50, 2, 10), 2) == 29.15 and round(physics.soc_after(50, -2, 10), 2) == 69.18
+assert physics.wear_cost_rs(-3) == 0.0 and physics.wear_cost_rs(2) > 0
+
+# 12. Power cut: no grid, flexible jobs wait, battery then genset (with its minimum load), then unserved
+cut, _ = fixed(grid_available=False, flexible_loads=[pump])
+assert cut["decision"]["grid_used_kw"] == 0.0 and cut["decision"]["battery_used_kw"] == 3.0, cut["decision"]
+assert cut["decision"]["defer_loads"] == [pump["name"]] and cut["decision"]["genset_kw"] == 0.0, cut["decision"]
+low, _ = fixed(grid_available=False, battery_soc_pct=22.0)
+assert low["decision"]["genset_kw"] == 2.81 and low["decision"]["battery_used_kw"] == 0.19, low["decision"]
+tiny = enforce_safety_node(base_state(grid_available=False, battery_soc_pct=20.5, solar_kw=2.5,
+                                      decision=decide(solar=2.5, battery=0.05)))["decision"]
+assert tiny["genset_kw"] == 1.5 and tiny["battery_used_kw"] < 0, tiny   # min-load genset covers the gap and charges
+short = enforce_safety_node(base_state(grid_available=False, battery_soc_pct=20.0, critical_load_kw=7.0,
+                                       decision=decide(grid=7.0)))
+assert short["decision"]["genset_kw"] == 5.0 and short["decision"]["unserved_kw"] == 2.0, short["decision"]
+assert any("could not be served" in a for a in short["alerts"])
+assert short["decision"]["grid_export_kw"] == 0.0
+
+# 13. BMS: limits taper near full/empty, and injected faults isolate the battery
+from bms import bms_limits
+assert bms_limits(95.0, 1.0)["max_charge_kw"] == 2.5 and bms_limits(50.0, 1.0)["max_charge_kw"] == 5.0
+assert bms_limits(22.0, 1.0)["max_discharge_kw"] == 2.0
+hot = bms_limits(60.0, 1.0, fault="overtemp")
+assert hot["max_discharge_kw"] == 0.0 and hot["alarms"], hot
+iso = enforce_safety_node(base_state(bms=hot, decision=decide(battery=3.0)))
+assert iso["decision"]["battery_used_kw"] == 0.0 and iso["decision"]["grid_used_kw"] == 3.0, iso["decision"]
+assert any(a.startswith("BMS:") for a in iso["alerts"])
+assert bms_limits(60.0, 1.0, 50.0)["max_charge_kw"] == 2.5   # 53 degC battery: limits halved
 
 # 11. Export earns credit and counts as avoided CO2 in the report
 state = base_state(solar_kw=6.0, decision={**decide(solar=3.0), "grid_export_kw": 3.0})

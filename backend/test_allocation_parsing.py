@@ -55,7 +55,7 @@ assert fallback["ai_used"] is True and fallback["ai_fallback"] is True
 
 # Low battery: the fixed rule stops at the reserve and buys the rest from the grid
 low = allocation._fallback_decision({**STATE, "battery_soc_pct": 22.0}, "test")
-assert low["battery_used_kw"] == 0.2 and low["grid_used_kw"] == 2.3, low
+assert low["battery_used_kw"] == 0.19 and low["grid_used_kw"] == 2.31, low   # discharge losses
 
 # AI budget used up: the LLM is never called
 class ExplodingLlm:

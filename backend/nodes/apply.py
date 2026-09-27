@@ -1,18 +1,18 @@
-from config import CYCLE_HOURS
+import physics
 
 
 def apply_decision_node(state):
     """Applies the (safety-checked) decision to the battery and the flexible jobs.
-    Runs exactly once per simulated hour: the forecast check now happens in
-    sensing, before the decision, so nothing loops back through here."""
+    Runs exactly once per simulated hour: the forecast check happens in sensing,
+    before the decision, so nothing loops back through here."""
     decision = state["decision"]
     battery_used_kw = decision.get("battery_used_kw", 0)
 
-    # Positive battery_used_kw is discharge (SOC falls), negative is charging (SOC rises).
-    # safety.py already keeps the request inside 0-100%; clamping here keeps this
-    # function correct on its own.
-    pct_change = (battery_used_kw * CYCLE_HOURS / state["battery_capacity_kwh"]) * 100
-    new_soc = min(100, max(0, state["battery_soc_pct"] - pct_change))
+    # Positive battery_used_kw is discharge delivered to the site; negative is charging.
+    # Charging and discharging both lose energy (round-trip efficiency), and energy taken
+    # out wears the battery (state of health).
+    new_soc = physics.soc_after(state["battery_soc_pct"], battery_used_kw, state["battery_capacity_kwh"])
+    new_soh = physics.soh_after(state.get("battery_soh", 1.0), battery_used_kw)
 
     defer_names = set(decision.get("defer_loads", []))
     updated_loads = [
@@ -23,5 +23,6 @@ def apply_decision_node(state):
     return {
         **state,
         "battery_soc_pct": round(new_soc, 2),
+        "battery_soh": new_soh,
         "flexible_loads": updated_loads,
     }
