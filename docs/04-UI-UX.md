@@ -4,7 +4,7 @@
 |---|---|
 | Version | **v2** (27 Sep 2026) |
 | Audience | Frontend developers and designers working in `frontend/src` |
-| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [06-V2-Roadmap](06-V2-Roadmap.md) |
+| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [06-Roadmap](06-Roadmap.md) |
 
 Status tags: **Done** = in the current build · **Planned** = not built.
 

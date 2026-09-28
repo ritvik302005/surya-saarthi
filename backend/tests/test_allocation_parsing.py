@@ -1,7 +1,12 @@
 """Fast, offline checks for allocator response handling.
 
-Run from backend with: python test_allocation_parsing.py
+Run from backend with: python tests/test_allocation_parsing.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 
 import nodes.allocation as allocation
 

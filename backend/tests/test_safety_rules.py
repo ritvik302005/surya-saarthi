@@ -1,7 +1,12 @@
 """Fast, offline checks for the hard safety rules, load carry-over and report.
 
-Run from backend with: python test_safety_rules.py
+Run from backend with: python tests/test_safety_rules.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 
 from nodes.safety import enforce_safety_node
 from nodes.sensing import merge_flexible_loads

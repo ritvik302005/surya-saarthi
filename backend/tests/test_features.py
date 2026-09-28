@@ -2,8 +2,13 @@
 
 No Groq and no network: the weather feed is the clear-sky curve and the LLM is either
 absent (rule-based parser) or stubbed.
-Run from backend with: python test_features.py
+Run from backend with: python tests/test_features.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 import hashlib
 import hmac
 import json

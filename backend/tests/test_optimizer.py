@@ -1,7 +1,12 @@
 """Offline checks for the 24-hour optimizer and its explanations (no Groq, no network).
 
-Run from backend with: python test_optimizer.py
+Run from backend with: python tests/test_optimizer.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 import config
 from explain import build_facts, explain
 from nodes.optimize import optimizer_node

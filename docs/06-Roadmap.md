@@ -1,11 +1,6 @@
-# Surya Saarthi v2 — Roadmap
+# Surya Saarthi — Roadmap
 
-| | |
-|---|---|
-| Started | 27 Sep 2026, from the SIH `sih-improvements` branch (commit `e4006ec`) |
-| Location | `Documents/surya-saarthi-v2`, branch `main`, no remote yet |
-| Context for new chats | [`MEMORY.md`](../MEMORY.md) (loaded via `CLAUDE.md`) |
-| SIH copy | `Documents/microgrid-agent-sih` is left untouched |
+Version 2 started on 27 Sep 2026 from the Smart India Hackathon build. This page tracks what is done and what is next.
 
 ## Positioning
 
@@ -18,7 +13,7 @@
 
 Status: ✅ done · 🔄 in progress · ⬜ not started
 
-### Phase 0 — Stop the bleeding (week 1) ✅
+### Phase 0 — Fix the foundations (week 1) ✅
 
 | Task | Status | Notes |
 |---|---|---|

@@ -1,8 +1,13 @@
 """Offline check that two viewers get separate sessions.
 
 The graph is replaced with a stub so no LLM or network call is made.
-Run from backend with: python test_sessions.py
+Run from backend with: python tests/test_sessions.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 from fastapi.testclient import TestClient
 
 import main

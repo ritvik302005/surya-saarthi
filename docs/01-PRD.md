@@ -6,7 +6,7 @@
 | Context | Smart India Hackathon 2026, PS **SIH26200** (AICTE) — "Innovative ideas that help manage and generate renewable / sustainable sources more efficiently" · Theme: Renewable / Sustainable Energy · Category: Software |
 | Version | **v2** (27 Sep 2026). v1 (the SIH submission) lives in the separate `microgrid-agent-sih` repo |
 | Status | Built and benchmarked in simulation; not connected to real equipment |
-| Related | [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [05-Development-Plan](05-Development-Plan.md) · [06-V2-Roadmap](06-V2-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
+| Related | [02-SRS](02-SRS.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [05-Development-Plan](05-Development-Plan.md) · [06-Roadmap](06-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
 
 ---
 

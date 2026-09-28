@@ -4,7 +4,7 @@
 |---|---|
 | Version | **v2** (27 Sep 2026) |
 | Scope | Backend API (FastAPI + LangGraph + optimizer) and web frontend (React) in this repository |
-| Related | [01-PRD](01-PRD.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [06-V2-Roadmap](06-V2-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
+| Related | [01-PRD](01-PRD.md) · [03-Architecture](03-Architecture.md) · [04-UI-UX](04-UI-UX.md) · [06-Roadmap](06-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
 
 **Conventions.** Each requirement has an ID, a "shall" statement and a test. **Status**: `Done` (implemented; the named test exists in `backend/test_*.py` or is the manual check) or `Planned`. Units: kW, kWh, ₹, % SOC. One cycle = one simulated hour. All tunables are in `backend/config.py`.
 

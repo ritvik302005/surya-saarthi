@@ -8,8 +8,13 @@ unserved; the grid is never used in a cut; rate limits hold; solar is fully
 accounted for. Also: AI off == fixed-rule baseline, and the optimizer's plans pass
 the safety check without overrides.
 
-Run from backend with: python test_cycle_accounting.py
+Run from backend with: python tests/test_cycle_accounting.py
 """
+
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))  # backend/
 import json
 from types import SimpleNamespace
 

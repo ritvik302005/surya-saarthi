@@ -4,7 +4,7 @@
 |---|---|
 | Version | **v2** (27 Sep 2026) |
 | Principle | Keep it small: one static web app + one Python service. No database, queue or microservices until a real need appears. |
-| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [04-UI-UX](04-UI-UX.md) · [06-V2-Roadmap](06-V2-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
+| Related | [01-PRD](01-PRD.md) · [02-SRS](02-SRS.md) · [04-UI-UX](04-UI-UX.md) · [06-Roadmap](06-Roadmap.md) · [07-Benchmark-Results](07-Benchmark-Results.md) |
 
 ---
 
