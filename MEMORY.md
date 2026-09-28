@@ -10,7 +10,7 @@ Last updated: 28 Sep 2026. Keep this file current at the end of every working se
 ## Two repos — never mix them
 | Repo | Path | Branch | Status |
 |---|---|---|---|
-| **v2 (this one)** | `C:\Users\RITVIK\Documents\surya-saarthi-v2` | `main` | All new work. **No git remote**; nothing pushed. Ask before creating a GitHub repo or pushing. |
+| **v2 (this one)** | `C:\Users\RITVIK\Documents\surya-saarthi-v2` | `main` | All new work. Public repo **github.com/ritvik302005/surya-saarthi** (created 28 Sep at the user's request, for SIH). Ask before pushing. Not deployed yet (Render backend + Vercel frontend). |
 | SIH version (v1) | `C:\Users\RITVIK\Documents\microgrid-agent-sih` | `sih-improvements` | Pushed to github.com/ritvik302005/microgrid-agent; **do not modify** without asking. Not merged to `main`. |
 
 Live site (still v1, deploys from `main` of the GitHub repo): frontend https://microgrid-agent.vercel.app, backend https://microgrid-agent.onrender.com.
