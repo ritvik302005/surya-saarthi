@@ -211,7 +211,7 @@ export default function Landing({ onStart }) {
       </section>
 
       <section className="landing-section">
-        <Reveal><span className="section-eyebrow">Questions judges ask</span></Reveal>
+        <Reveal><span className="section-eyebrow">FAQs</span></Reveal>
         <div className="faq-list">
           {FAQ.map((item) => (
             <details key={item.q} className="faq-item">
