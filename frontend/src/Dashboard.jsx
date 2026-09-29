@@ -213,6 +213,18 @@ export default function Dashboard({ onBack }) {
     }
   }
 
+  // The new weather applies from the next hour; the current run is kept.
+  async function changeWeather(next) {
+    setScenario(next)
+    try {
+      await checkedJson(await apiFetch('/weather', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ scenario: next }),
+      }))
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+  }
+
   function changeLang(next) {
     setLang(next)
     try { localStorage.setItem('ss-lang', next) } catch { /* private mode: keep it for this visit only */ }
@@ -277,10 +289,10 @@ export default function Dashboard({ onBack }) {
               <select
                 id="scenario-select"
                 value={scenario}
-                onChange={(e) => setScenario(e.target.value)}
+                onChange={(e) => changeWeather(e.target.value)}
                 disabled={simLoading}
                 className="flex-1 sm:flex-none min-w-0 bg-secondary border border-border rounded-md px-2 py-1.5 text-foreground disabled:opacity-50"
-                title="Manually set the weather scenario for the next run"
+                title="Weather from the next hour on (Run 1 hour), or for a whole new run (Simulate)"
               >
                 {Object.entries(scenarios).map(([key, label]) => (
                   <option key={key} value={key} style={{ color: '#111827', backgroundColor: '#fff' }}>{label}</option>
@@ -424,6 +436,12 @@ export default function Dashboard({ onBack }) {
             {state && (
               <>
                 <SituationPanel state={state} decision={decision} scenarioLabel={scenarios[state.scenario] || state.scenario || ''} />
+                {!simLoading && state.scenario && scenario !== state.scenario && (
+                  <p className="weather-pending" role="status">
+                    Weather set to <strong>{scenarios[scenario] || scenario}</strong>. It shows from the next hour:
+                    press <strong>Run 1 hour</strong>, or <strong>Simulate</strong> for a whole new day.
+                  </p>
+                )}
                 <div className="legend">
                   <span><i style={{ background: 'var(--solar)' }} />Solar</span>
                   <span><i style={{ background: 'var(--battery)' }} />Battery</span>

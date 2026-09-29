@@ -75,7 +75,7 @@ export default function EnergyFlow({ solarKw = 0, batteryKw = 0, gridKw = 0, exp
         )}
         {gridAvailable && exportKw > 0.05 && (
           <text x={150} y={392} textAnchor="middle" className="node-unit" style={{ fill: 'var(--solar)' }}>
-            ↑ exporting {exportKw.toFixed(1)} kW
+            ↑ selling {exportKw.toFixed(1)} kW extra sun
           </text>
         )}
         {gridAvailable && gensetKw > 0.05 && (

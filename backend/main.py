@@ -477,6 +477,21 @@ def set_controller(options: ControllerOptions, x_session_id: Optional[str] = Hea
         return {"controller": session.controller}
 
 
+class WeatherOptions(BaseModel):
+    scenario: str
+
+
+@app.post("/weather")
+def set_weather(options: WeatherOptions, x_session_id: Optional[str] = Header(None)):
+    """Switch the weather scenario from the next hour on, without clearing the run."""
+    if options.scenario not in config.WEATHER_SCENARIOS:
+        return _invalid_scenario(options.scenario)
+    session = session_from(x_session_id)
+    with session.lock:
+        session.scenario = options.scenario
+        return {"scenario": session.scenario}
+
+
 # --- Operator notes, constraints, BMS faults (v2 Phase 2) ---
 
 class NoteText(BaseModel):

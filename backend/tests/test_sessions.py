@@ -71,6 +71,15 @@ assert bad.status_code == 400 and "error" in bad.json(), bad.text
 client.post("/cycle", headers=A)
 assert client.get("/history", headers=A).json()["cycles"][-1]["controller"] == "ai"
 
+# Weather: switching it keeps the run going (same hour count) and the next hour uses the new weather
+client.post("/reset", json={"scenario": "sunny", "controller": "optimizer"}, headers=A)
+client.post("/cycle", headers=A)
+assert client.post("/weather", json={"scenario": "monsoon"}, headers=A).json()["scenario"] == "monsoon"
+client.post("/cycle", headers=A)
+cycles = client.get("/history", headers=A).json()["cycles"]
+assert len(cycles) == 2 and cycles[0]["scenario"] == "sunny" and cycles[1]["scenario"] == "monsoon", cycles
+assert client.post("/weather", json={"scenario": "hail"}, headers=A).status_code == 400
+
 # Per-session AI budget: after 2 AI hours, the next hour uses the fixed rule, and a reset doesn't refill it
 config.AI_HOURS_PER_SESSION_PER_DAY = 2
 C = {"X-Session-Id": "budget-c"}

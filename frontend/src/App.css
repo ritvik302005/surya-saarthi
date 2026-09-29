@@ -84,7 +84,15 @@
 .scene-cloud.grey { --cloud: rgba(158, 166, 176, 0.95); }
 .scene-cloud.night { --cloud: rgba(58, 64, 84, 0.9); }
 @keyframes cloud-drift { from { margin-left: -3%; } to { margin-left: 3%; } }
-@media (prefers-reduced-motion: reduce) { .scene-cloud { animation: none; } }
+/* Monsoon: thin slanted rain streaks over the sky and the scene. */
+.scene-rain { position: absolute; inset: 0; pointer-events: none; opacity: 0.45;
+  background-image: repeating-linear-gradient(105deg, rgba(210, 222, 236, 0.55) 0 1px, transparent 1px 14px);
+  background-size: 100% 60px; animation: scene-rain 0.6s linear infinite; }
+@keyframes scene-rain { to { background-position: -16px 60px; } }
+.weather-pending { margin: 0.25rem auto 0.75rem; max-width: 56rem; font-size: 0.8rem; text-align: center;
+  color: var(--muted-foreground); border: 1px dashed var(--border); border-radius: 0.5rem; padding: 0.45rem 0.75rem; }
+.weather-pending strong { color: var(--foreground); font-weight: 600; }
+@media (prefers-reduced-motion: reduce) { .scene-cloud, .scene-rain { animation: none; } }
 .scene-time { position: absolute; top: 12px; left: 14px; z-index: 2; font-family: var(--font-mono); font-size: 0.72rem;
   color: #f2f0ec; background: rgba(14, 15, 16, 0.6); padding: 4px 10px; border-radius: 100px; pointer-events: none; }
 @media (max-width: 640px) {

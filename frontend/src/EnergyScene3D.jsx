@@ -299,7 +299,7 @@ const WEATHER = {
   sunny: { overcast: 0, clouds: 0, label: 'clear' },
   normal: { overcast: 0.12, clouds: 2, label: 'some clouds' },
   cloudy: { overcast: 0.5, clouds: 4, label: 'cloudy' },
-  monsoon: { overcast: 0.75, clouds: 6, label: 'monsoon' },
+  monsoon: { overcast: 0.75, clouds: 6, label: 'monsoon rain', rain: true },
 }
 // Cloud shapes and places in the sky band (percent of its width / height), used in this order.
 const CLOUDS = [
@@ -368,9 +368,10 @@ export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGen
       el.querySelector('[data-v]').textContent = main
       el.querySelector('[data-s]').textContent = sub
     }
-    set('solar', fmt(solarGenKw), solarGenKw <= 0.05 ? 'no sun now' : exportKw > 0.05 ? `exporting ${fmt(exportKw)}` : 'generating')
+    set('solar', fmt(solarGenKw), solarGenKw <= 0.05 ? 'no sun now' : exportKw > 0.05 ? `${fmt(exportKw)} extra sold to grid` : 'generating')
     set('battery', `${Math.round(socPct)}%`, batteryKw < -0.05 ? `charging ${fmt(batteryKw)}` : batteryKw > 0.05 ? `supplying ${fmt(batteryKw)}` : 'idle')
-    set('grid', gridAvailable ? fmt(gridKw) : 'Power cut', gridAvailable ? (gridKw > 0.05 ? 'buying' : 'not needed') : 'grid is off')
+    set('grid', gridAvailable ? fmt(exportKw > 0.05 && gridKw <= 0.05 ? exportKw : gridKw) : 'Power cut',
+        !gridAvailable ? 'grid is off' : gridKw > 0.05 ? 'buying' : exportKw > 0.05 ? 'selling extra sun' : 'not needed')
     set('genset', fmt(gensetKw), gensetKw > 0.05 ? 'running on diesel' : 'off')
     set('house', fmt(loadKw), unservedKw > 0.05 ? `${fmt(unservedKw)} not served` : 'all load powered')
     const g = labelRefs.current.genset
@@ -568,10 +569,11 @@ export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGen
       if (sunRef.current) {
         const up = arc > 0 && arc < 1
         const s = sunRef.current.style
-        s.opacity = up ? String(Math.min(1, 0.45 + sunFrac) * (1 - 0.45 * cur.overcast)) : '0'
+        // Behind heavy cloud the sun is only a faint disc (cloudy ~0.5, monsoon ~0.25 of clear).
+        s.opacity = up ? String(Math.min(1, 0.45 + sunFrac) * (1 - cur.overcast)) : '0'
         s.left = `${6 + Math.min(1, Math.max(0, arc)) * 86}%`
         s.top = `${88 - Math.sin(Math.PI * Math.min(1, Math.max(0, arc))) * 70}%`
-        s.setProperty('--glow', `${8 + sunFrac * 34}px`)
+        s.setProperty('--glow', `${(8 + sunFrac * 34) * (1 - cur.overcast)}px`)
       }
       if (moonRef.current) moonRef.current.style.opacity = String(Math.max(0, 1 - sky.daylight * 2) * (1 - 0.6 * cur.overcast))
 
@@ -639,6 +641,7 @@ export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGen
           <div key={i} className={`scene-cloud ${cloudTone}`}
                style={{ left: `${c.x}%`, top: `${c.y}%`, width: `${c.w / 10.4}%`, animationDelay: `${-i * 7}s` }} />
         ))}
+        {weather.rain && <div className="scene-rain" />}
       </div>
       <div className="scene-time" aria-hidden="true">{icon} {hh(hour)} · {timeOfDay} · {weather.label}</div>
       {label('solar', 'Solar', 'var(--solar)')}
