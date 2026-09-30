@@ -569,8 +569,8 @@ export default function EnergyScene3D({ hour = 12, scenario = 'normal', solarGen
       if (sunRef.current) {
         const up = arc > 0 && arc < 1
         const s = sunRef.current.style
-        // Behind heavy cloud the sun is only a faint disc (cloudy ~0.5, monsoon ~0.25 of clear).
-        s.opacity = up ? String(Math.min(1, 0.45 + sunFrac) * (1 - cur.overcast)) : '0'
+        // Under overcast skies the sun is hidden: nearly gone when cloudy, gone in monsoon.
+        s.opacity = up ? String(Math.min(1, 0.45 + sunFrac) * Math.max(0, 1 - 1.8 * cur.overcast)) : '0'
         s.left = `${6 + Math.min(1, Math.max(0, arc)) * 86}%`
         s.top = `${88 - Math.sin(Math.PI * Math.min(1, Math.max(0, arc))) * 70}%`
         s.setProperty('--glow', `${(8 + sunFrac * 34) * (1 - cur.overcast)}px`)

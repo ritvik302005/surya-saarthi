@@ -129,10 +129,14 @@ def grid_price_for_hour(hour_of_day, peak_multiplier=None):
 # actual shape of a day (dawn/noon/dusk) just scaled down, not an arbitrary curve.
 # "variability" is how far actual sunlight wanders from the forecast hour to hour
 # (std-dev as a fraction), so passing clouds make the forecast wrong and trigger replans.
+# Live demo only: the benchmark runs on recorded weather and does not use these multipliers.
+# Overcast skies typically give roughly 10-30% of clear-sky output and heavy monsoon cloud
+# well under 15%, so the demo uses 0.25 and 0.08 (it used 0.55 and 0.30 until 30 Sep 2026,
+# which still covered the whole house at noon under "overcast").
 WEATHER_SCENARIOS = {
     "sunny":   {"multiplier": 1.15, "variability": 0.05, "label": "Clear sunny day"},
     "normal":  {"multiplier": 1.00, "variability": 0.20, "label": "Normal / mixed clouds"},
-    "cloudy":  {"multiplier": 0.55, "variability": 0.35, "label": "Overcast, patchy clouds"},
-    "monsoon": {"multiplier": 0.30, "variability": 0.45, "label": "Heavy monsoon cloud cover"},
+    "cloudy":  {"multiplier": 0.25, "variability": 0.35, "label": "Overcast, patchy clouds"},
+    "monsoon": {"multiplier": 0.08, "variability": 0.45, "label": "Heavy monsoon cloud cover"},
 }
 DEFAULT_SCENARIO = "normal"
