@@ -80,6 +80,18 @@ cycles = client.get("/history", headers=A).json()["cycles"]
 assert len(cycles) == 2 and cycles[0]["scenario"] == "sunny" and cycles[1]["scenario"] == "monsoon", cycles
 assert client.post("/weather", json={"scenario": "hail"}, headers=A).status_code == 400
 
+# Start time: a run can begin at any hour of day 1; invalid hours are rejected
+assert client.post("/reset", json={"start_hour": 12}, headers=A).json()["start_hour"] == 12
+assert client.post("/cycle", headers=A).json()["sim_hour"] == 12
+assert client.post("/cycle", headers=A).json()["sim_hour"] == 13
+assert client.post("/reset", headers=A).json()["start_hour"] == 0
+assert client.post("/cycle", headers=A).json()["sim_hour"] == 0
+for bad_hour in (-1, 24):
+    assert client.post("/reset", json={"start_hour": bad_hour}, headers=A).status_code == 400
+    assert client.post("/simulate", json={"days": 1, "start_hour": bad_hour}, headers=A).status_code == 400
+sim = client.post("/simulate", json={"scenario": "sunny", "days": 1, "seed": 5, "start_hour": 9}, headers=A).json()
+assert sim["cycles"][0]["sim_hour"] == 9 and len(sim["cycles"]) == 24 and sim["cycles"][-1]["sim_hour"] == 32, sim["cycles"][0]
+
 # Per-session AI budget: after 2 AI hours, the next hour uses the fixed rule, and a reset doesn't refill it
 config.AI_HOURS_PER_SESSION_PER_DAY = 2
 C = {"X-Session-Id": "budget-c"}

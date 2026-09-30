@@ -87,7 +87,7 @@ class Session:
         self.requests = RollingCounter(60)
         self.reset()
 
-    def reset(self, scenario=None, seed=None, controller=None, keep_constraints=False):
+    def reset(self, scenario=None, seed=None, controller=None, keep_constraints=False, start_hour=0):
         # keeps self.lock: reset runs while the lock is held
         # Weather is downloaded again if it's more than a few hours old; this run keeps
         # its version even if another session downloads newer weather later.
@@ -114,7 +114,7 @@ class Session:
             self.bms_fault = None     # injected BMS fault for testing
         self.history = []
         self.cycle_counter = 0
-        self.sim_hour = 0
+        self.sim_hour = start_hour        # hour of day 1 the run starts at (0 = midnight)
 
     def run_inputs(self):
         """Inputs that both the chosen controller and the baseline see each hour."""
@@ -175,6 +175,7 @@ class ResetOptions(BaseModel):
     seed: Optional[int] = None
     controller: Optional[str] = None
     keep_constraints: bool = False   # carry power cuts/targets into the new run (same time of day)
+    start_hour: int = 0              # hour of day the run starts at (0-23)
 
 
 class SimulateOptions(BaseModel):
@@ -182,6 +183,7 @@ class SimulateOptions(BaseModel):
     days: int = 1
     seed: Optional[int] = None
     controller: Optional[str] = None
+    start_hour: int = 0              # hour of day the run starts at (0-23)
 
 
 class ControllerOptions(BaseModel):
@@ -379,6 +381,8 @@ def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None
         return _invalid_scenario(options.scenario)
     if options.days < 1 or options.days > 7:
         return _bad_request("days must be between 1 and 7")
+    if not 0 <= options.start_hour <= 23:
+        return _bad_request("start_hour must be between 0 and 23")
     if options.controller and options.controller not in CONTROLLERS:
         return _invalid_controller(options.controller)
 
@@ -386,7 +390,7 @@ def simulate(options: SimulateOptions, x_session_id: Optional[str] = Header(None
     if (limited := _rate_limited(session)):
         return limited
     with session.lock:
-        session.reset(options.scenario, options.seed, options.controller)
+        session.reset(options.scenario, options.seed, options.controller, start_hour=options.start_hour)
         total_hours = options.days * 24
         for _ in range(total_hours):
             _run_one_cycle(session)
@@ -454,6 +458,9 @@ def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[s
     seed = options.seed if options else None
     controller = options.controller if options else None
     keep = options.keep_constraints if options else False
+    start_hour = options.start_hour if options else 0
+    if not 0 <= start_hour <= 23:
+        return _bad_request("start_hour must be between 0 and 23")
     if scenario and scenario not in config.WEATHER_SCENARIOS:
         return _invalid_scenario(scenario)
     if controller and controller not in CONTROLLERS:
@@ -462,8 +469,9 @@ def reset_state(options: Optional[ResetOptions] = None, x_session_id: Optional[s
     if (limited := _rate_limited(session)):
         return limited
     with session.lock:
-        session.reset(scenario, seed, controller, keep_constraints=keep)
-        return {"status": "reset", "scenario": session.scenario, "seed": session.seed, "controller": session.controller}
+        session.reset(scenario, seed, controller, keep_constraints=keep, start_hour=start_hour)
+        return {"status": "reset", "scenario": session.scenario, "seed": session.seed, "controller": session.controller,
+                "start_hour": start_hour}
 
 
 @app.post("/controller")

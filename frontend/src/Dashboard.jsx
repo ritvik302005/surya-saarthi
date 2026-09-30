@@ -55,6 +55,7 @@ export default function Dashboard({ onBack }) {
   const [scenarios, setScenarios] = useState({ normal: 'Normal / mixed clouds' })
   const [scenario, setScenario] = useState('normal')
   const [days, setDays] = useState(1)
+  const [startHour, setStartHour] = useState(0)           // hour of day a new run starts at
   const [simLoading, setSimLoading] = useState(false)
   const [simProgress, setSimProgress] = useState(null)   // { current, total } while running
   const [simStatusText, setSimStatusText] = useState('')  // latest reasoning, shown live
@@ -95,7 +96,7 @@ export default function Dashboard({ onBack }) {
       await checkedJson(await apiFetch('/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario, keep_constraints: true }),
+        body: JSON.stringify({ scenario, keep_constraints: true, start_hour: startHour }),
       }))
 
       setCyclesRun(0); setTotalSavings(0); setTotalCarbon(0); setHistory([]); setStepIndex(-1)
@@ -155,6 +156,7 @@ export default function Dashboard({ onBack }) {
       })))
       if (data?.scenario) setScenario(data.scenario)
       if (data?.controller) setController(data.controller)
+      if (cycles.length) setStartHour(cycles[0].sim_hour % 24)
       setError(null)
     } catch (err) {
       setError(errorMessage(err))
@@ -225,6 +227,22 @@ export default function Dashboard({ onBack }) {
     }
   }
 
+  // Before the first hour the new start time applies straight away; during a run it waits
+  // for Reset session or Simulate (a hint is shown), so a run is never cleared by accident.
+  async function changeStartHour(next) {
+    setStartHour(next)
+    if (cyclesRun > 0 || simLoading) return
+    try {
+      await checkedJson(await apiFetch('/reset', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario, keep_constraints: true, start_hour: next }),
+      }))
+    } catch (err) {
+      setError(errorMessage(err))
+    }
+  }
+
   function changeLang(next) {
     setLang(next)
     try { localStorage.setItem('ss-lang', next) } catch { /* private mode: keep it for this visit only */ }
@@ -235,7 +253,7 @@ export default function Dashboard({ onBack }) {
       await checkedJson(await apiFetch('/reset', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ scenario }),
+        body: JSON.stringify({ scenario, start_hour: startHour }),
       }))
       setState(null); setCyclesRun(0); setTotalSavings(0); setTotalCarbon(0)
       setHistory([]); setStepIndex(-1)
@@ -309,6 +327,20 @@ export default function Dashboard({ onBack }) {
               />
               {/* hidden on phones: the button below already says "Simulate N days" */}
               <span className="hidden sm:inline text-muted-foreground" aria-hidden="true">day{days !== 1 ? 's' : ''}</span>
+              <span className="hidden sm:inline text-muted-foreground" aria-hidden="true">from</span>
+              <label htmlFor="start-hour" className="sr-only">Start time of the run</label>
+              <select
+                id="start-hour"
+                value={startHour}
+                onChange={(e) => changeStartHour(Number(e.target.value))}
+                disabled={simLoading}
+                className="w-[4.75rem] bg-secondary border border-border rounded-md px-1.5 py-1.5 text-foreground disabled:opacity-50"
+                title="Clock time a new run starts at. Applies now if no hour has run yet, otherwise on Reset session or Simulate."
+              >
+                {Array.from({ length: 24 }, (_, h) => (
+                  <option key={h} value={h} style={{ color: '#111827', backgroundColor: '#fff' }}>{String(h).padStart(2, '0')}:00</option>
+                ))}
+              </select>
               <Tooltip>
                 <TooltipTrigger render={<Button variant="secondary" size="sm" onClick={requestSimulation} disabled={simLoading || loading} className="shrink-0 font-sans" />}>
                   {simLoading ? 'Simulating…' : `Simulate ${days} day${days !== 1 ? 's' : ''}`}
@@ -436,6 +468,12 @@ export default function Dashboard({ onBack }) {
             {state && (
               <>
                 <SituationPanel state={state} decision={decision} scenarioLabel={scenarios[state.scenario] || state.scenario || ''} />
+                {!simLoading && cyclesRun > 0 && startHour !== ((state.sim_hour - (cyclesRun - 1)) % 24 + 24) % 24 && (
+                  <p className="weather-pending" role="status">
+                    Start time set to <strong>{String(startHour).padStart(2, '0')}:00</strong>. It applies to the next run:
+                    press <strong>Reset session</strong>, or <strong>Simulate</strong> for a whole new day.
+                  </p>
+                )}
                 {!simLoading && state.scenario && scenario !== state.scenario && (
                   <p className="weather-pending" role="status">
                     Weather set to <strong>{scenarios[scenario] || scenario}</strong>. It shows from the next hour:
