@@ -138,6 +138,10 @@ The backend keeps each session in memory, so it needs a long-running server, not
 - [Development plan](docs/05-Development-Plan.md) · [Roadmap](docs/06-Roadmap.md)
 - [Benchmark results](docs/07-Benchmark-Results.md) · [Technical details](docs/08-Technical-Details.md)
 
+## Licence
+
+Copyright (c) 2026 Ritvik Talwar. All rights reserved. The code is public so it can be viewed and evaluated; it may not be copied, reused or redistributed without written permission. See [LICENSE](LICENSE).
+
 ## Disclaimer and credits
 
 This is a simulation for research and demonstration. It does not control real equipment and comes without warranty. Results come from computer tests on recorded weather, not from a real site.
